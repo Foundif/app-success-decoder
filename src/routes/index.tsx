@@ -1,735 +1,835 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
-  HardHat, MapPin, Users, Wallet, BarChart3, Plus, ArrowLeft, ArrowRight,
-  CheckCircle2, Camera, Scan, IndianRupee, Calendar, Clock, Star,
-  Phone, ChevronRight, Search, Bell, TrendingUp, Send, Shield, Sparkles,
+  LayoutDashboard, Users, Clock, FolderKanban, BarChart3, Bell, Search,
+  Play, Pause, Square, Coffee, LogIn, LogOut, Camera, Activity, TrendingUp,
+  CheckCircle2, AlertCircle, Circle, ChevronRight, Plus, Filter, Calendar,
+  Shield, Settings, Eye, Image as ImageIcon, Zap, Target, ArrowUpRight,
+  ArrowDownRight, MoreVertical, X, Monitor, MousePointer, Keyboard, Timer,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "SiteSarthi — Construction labour, simplified" },
-      { name: "description", content: "Digital muster roll, auto wage calculation and one-tap UPI payouts for construction contractors." },
+      { title: "TillTask — Remote Workforce Productivity" },
+      { name: "description", content: "Monitor remote teams, track hours, and measure productivity without enterprise bloat." },
     ],
   }),
   component: App,
 });
 
-/* ---------- Mock data ---------- */
-type Worker = {
-  id: string; name: string; skill: "Mason" | "Helper" | "Carpenter" | "Electrician" | "Painter";
-  rate: number; phone: string; rating: number; present: boolean; advance: number; days: number; avatar: string;
+/* ---------------- Types & Mock Data ---------------- */
+type Status = "online" | "idle" | "offline";
+type Employee = {
+  id: string; name: string; role: string; team: string; status: Status;
+  lastActive: string; todayHours: number; activity: number; productivity: number;
+  project: string; avatar: string;
 };
-type Site = { id: string; name: string; address: string; workers: number; payroll: number; status: "Active" | "Idle"; };
+type Project = { id: string; name: string; client: string; members: number; hours: number; progress: number; color: string };
+type Screenshot = { id: string; emp: string; time: string; activity: number; app: string };
 
-const SITES: Site[] = [
-  { id: "s1", name: "Brigade Heights — Tower B", address: "Whitefield, Bengaluru", workers: 24, payroll: 142800, status: "Active" },
-  { id: "s2", name: "Prestige Lakeview Villa 12", address: "Sarjapur Road", workers: 8, payroll: 38400, status: "Active" },
-  { id: "s3", name: "Godrej Plot 47 — Slab", address: "Devanahalli", workers: 0, payroll: 0, status: "Idle" },
+const EMPLOYEES: Employee[] = [
+  { id: "e1", name: "Aarav Mehta", role: "Frontend Dev", team: "Product", status: "online", lastActive: "now", todayHours: 6.4, activity: 87, productivity: 92, project: "TillTask Web", avatar: "AM" },
+  { id: "e2", name: "Priya Sharma", role: "Designer", team: "Design", status: "online", lastActive: "now", todayHours: 5.1, activity: 78, productivity: 84, project: "Brand Refresh", avatar: "PS" },
+  { id: "e3", name: "Rahul Verma", role: "Backend Dev", team: "Product", status: "idle", lastActive: "12m ago", todayHours: 4.8, activity: 52, productivity: 71, project: "API v2", avatar: "RV" },
+  { id: "e4", name: "Sneha Iyer", role: "QA Engineer", team: "Product", status: "online", lastActive: "now", todayHours: 7.2, activity: 91, productivity: 95, project: "TillTask Web", avatar: "SI" },
+  { id: "e5", name: "Vikram Singh", role: "Marketing", team: "Growth", status: "offline", lastActive: "2h ago", todayHours: 3.0, activity: 0, productivity: 68, project: "Q1 Campaign", avatar: "VS" },
+  { id: "e6", name: "Anita Rao", role: "Content Writer", team: "Growth", status: "idle", lastActive: "8m ago", todayHours: 5.6, activity: 44, productivity: 76, project: "Blog Sprint", avatar: "AR" },
+  { id: "e7", name: "Karan Patel", role: "DevOps", team: "Product", status: "online", lastActive: "now", todayHours: 6.0, activity: 82, productivity: 88, project: "API v2", avatar: "KP" },
 ];
 
-const INITIAL_WORKERS: Worker[] = [
-  { id: "w1", name: "Ramesh Kumar", skill: "Mason", rate: 800, phone: "+91 98xxx 21001", rating: 4.8, present: true, advance: 2000, days: 18, avatar: "RK" },
-  { id: "w2", name: "Suresh Yadav", skill: "Helper", rate: 500, phone: "+91 98xxx 21002", rating: 4.5, present: true, advance: 500, days: 22, avatar: "SY" },
-  { id: "w3", name: "Mohan Lal", skill: "Carpenter", rate: 900, phone: "+91 98xxx 21003", rating: 4.9, present: false, advance: 0, days: 14, avatar: "ML" },
-  { id: "w4", name: "Anil Verma", skill: "Electrician", rate: 950, phone: "+91 98xxx 21004", rating: 4.7, present: true, advance: 1500, days: 16, avatar: "AV" },
-  { id: "w5", name: "Dinesh Pal", skill: "Helper", rate: 500, phone: "+91 98xxx 21005", rating: 4.2, present: true, advance: 0, days: 20, avatar: "DP" },
-  { id: "w6", name: "Rakesh Singh", skill: "Painter", rate: 750, phone: "+91 98xxx 21006", rating: 4.6, present: false, advance: 1000, days: 12, avatar: "RS" },
+const PROJECTS: Project[] = [
+  { id: "p1", name: "TillTask Web", client: "Internal", members: 5, hours: 142, progress: 68, color: "bg-amber-500" },
+  { id: "p2", name: "API v2", client: "Internal", members: 3, hours: 96, progress: 45, color: "bg-emerald-500" },
+  { id: "p3", name: "Brand Refresh", client: "Acme Co.", members: 2, hours: 38, progress: 80, color: "bg-rose-500" },
+  { id: "p4", name: "Q1 Campaign", client: "Growth", members: 4, hours: 54, progress: 30, color: "bg-indigo-500" },
 ];
 
-const POOL: Worker[] = [
-  { id: "p1", name: "Vikas Mehta", skill: "Mason", rate: 850, phone: "+91 98xxx 33001", rating: 4.9, present: false, advance: 0, days: 0, avatar: "VM" },
-  { id: "p2", name: "Pankaj Roy", skill: "Carpenter", rate: 900, phone: "+91 98xxx 33002", rating: 4.7, present: false, advance: 0, days: 0, avatar: "PR" },
-  { id: "p3", name: "Sanjay Gupta", skill: "Electrician", rate: 1000, phone: "+91 98xxx 33003", rating: 5.0, present: false, advance: 0, days: 0, avatar: "SG" },
-  { id: "p4", name: "Arjun Das", skill: "Helper", rate: 500, phone: "+91 98xxx 33004", rating: 4.4, present: false, advance: 0, days: 0, avatar: "AD" },
+const SCREENSHOTS: Screenshot[] = [
+  { id: "ss1", emp: "Aarav Mehta", time: "10:42 AM", activity: 92, app: "VS Code" },
+  { id: "ss2", emp: "Priya Sharma", time: "10:38 AM", activity: 81, app: "Figma" },
+  { id: "ss3", emp: "Sneha Iyer", time: "10:30 AM", activity: 95, app: "Chrome" },
+  { id: "ss4", emp: "Rahul Verma", time: "10:24 AM", activity: 42, app: "Slack" },
+  { id: "ss5", emp: "Karan Patel", time: "10:18 AM", activity: 88, app: "Terminal" },
+  { id: "ss6", emp: "Anita Rao", time: "10:12 AM", activity: 55, app: "Notion" },
 ];
 
-const fmt = (n: number) => "₹" + n.toLocaleString("en-IN");
+const NOTIFICATIONS = [
+  { id: "n1", type: "idle", title: "Rahul Verma is idle", desc: "No activity for 12 minutes", time: "now" },
+  { id: "n2", type: "missing", title: "Missing screenshot", desc: "Vikram Singh — 11:00 AM slot", time: "5m" },
+  { id: "n3", type: "clockin", title: "Late clock-in", desc: "Anita Rao clocked in at 10:42 AM", time: "1h" },
+];
 
-/* ---------- App shell ---------- */
-type Screen =
-  | { name: "splash" }
-  | { name: "login" }
-  | { name: "tabs" }
-  | { name: "site"; siteId: string }
-  | { name: "checkin"; workerId: string }
-  | { name: "payout" }
-  | { name: "worker"; workerId: string };
-
+/* ---------------- App Shell ---------------- */
 function App() {
-  const [screen, setScreen] = useState<Screen>({ name: "splash" });
-  const [tab, setTab] = useState<"home" | "workers" | "pool" | "wages">("home");
-  const [workers, setWorkers] = useState<Worker[]>(INITIAL_WORKERS);
+  const [authed, setAuthed] = useState(false);
+  const [tab, setTab] = useState<"home" | "team" | "track" | "projects" | "reports">("home");
+  const [profileId, setProfileId] = useState<string | null>(null);
+  const [showNotif, setShowNotif] = useState(false);
+  const [showClock, setShowClock] = useState(false);
+  const [shotPreview, setShotPreview] = useState<Screenshot | null>(null);
+
+  if (!authed) return <Login onDone={() => setAuthed(true)} />;
+
+  const employee = profileId ? EMPLOYEES.find((e) => e.id === profileId) ?? null : null;
 
   return (
-    <div className="min-h-screen w-full flex justify-center bg-[oklch(0.94_0.01_80)]">
-      <div className="w-full max-w-md min-h-screen bg-background relative overflow-hidden shadow-[0_0_40px_rgba(0,0,0,0.06)]">
-        {screen.name === "splash" && <Splash onDone={() => setScreen({ name: "login" })} />}
-        {screen.name === "login" && <Login onDone={() => setScreen({ name: "tabs" })} />}
-        {screen.name === "tabs" && (
-          <Tabs
-            tab={tab} setTab={setTab} workers={workers}
-            openSite={(id) => setScreen({ name: "site", siteId: id })}
-            openWorker={(id) => setScreen({ name: "worker", workerId: id })}
-            openPayout={() => setScreen({ name: "payout" })}
-          />
+    <div className="min-h-dvh bg-background text-foreground flex flex-col">
+      <TopBar onBell={() => setShowNotif(true)} />
+      <main className="flex-1 pb-24">
+        {employee ? (
+          <EmployeeProfile emp={employee} onBack={() => setProfileId(null)} />
+        ) : tab === "home" ? (
+          <Dashboard onOpenEmp={setProfileId} onClock={() => setShowClock(true)} onShot={setShotPreview} />
+        ) : tab === "team" ? (
+          <TeamScreen onOpen={setProfileId} />
+        ) : tab === "track" ? (
+          <TrackingScreen onClock={() => setShowClock(true)} />
+        ) : tab === "projects" ? (
+          <ProjectsScreen />
+        ) : (
+          <ReportsScreen />
         )}
-        {screen.name === "site" && (
-          <SiteDetail
-            site={SITES.find((s) => s.id === screen.siteId)!}
-            workers={workers}
-            back={() => setScreen({ name: "tabs" })}
-            checkin={(wid) => setScreen({ name: "checkin", workerId: wid })}
-            payout={() => setScreen({ name: "payout" })}
-          />
+      </main>
+      {!employee && <BottomNav tab={tab} setTab={setTab} />}
+      {showNotif && <NotifSheet onClose={() => setShowNotif(false)} />}
+      {showClock && <ClockModal onClose={() => setShowClock(false)} />}
+      {shotPreview && <ShotModal shot={shotPreview} onClose={() => setShotPreview(null)} />}
+    </div>
+  );
+}
+
+/* ---------------- Login ---------------- */
+function Login({ onDone }: { onDone: () => void }) {
+  const [step, setStep] = useState<"email" | "otp">("email");
+  const [email, setEmail] = useState("admin@tilltask.io");
+  const [otp, setOtp] = useState("");
+
+  return (
+    <div className="min-h-dvh bg-background flex flex-col">
+      <div className="flex-1 px-6 pt-16 pb-8 max-w-md mx-auto w-full flex flex-col">
+        <div className="flex items-center gap-2 mb-12">
+          <div className="h-10 w-10 rounded-xl bg-primary grid place-items-center">
+            <Timer className="size-5 text-primary-foreground" />
+          </div>
+          <div>
+            <div className="font-bold text-lg leading-none">TillTask</div>
+            <div className="text-xs text-muted-foreground mt-0.5">Remote workforce, measured.</div>
+          </div>
+        </div>
+
+        <h1 className="text-3xl font-bold tracking-tight mb-2">
+          {step === "email" ? "Sign in to your workspace" : "Verify it's you"}
+        </h1>
+        <p className="text-muted-foreground mb-8">
+          {step === "email" ? "We'll send a one-time code to your work email." : `Enter the 6-digit code sent to ${email}`}
+        </p>
+
+        {step === "email" ? (
+          <>
+            <label className="text-sm font-medium mb-2">Work email</label>
+            <input
+              type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+              className="h-12 px-4 rounded-xl border border-border bg-surface text-base outline-none focus:ring-2 focus:ring-ring"
+              placeholder="you@company.com"
+            />
+            <button
+              onClick={() => setStep("otp")}
+              className="mt-4 h-12 rounded-xl bg-primary text-primary-foreground font-semibold active:scale-[0.98] transition"
+            >
+              Continue
+            </button>
+          </>
+        ) : (
+          <>
+            <input
+              value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              inputMode="numeric"
+              className="h-14 px-4 rounded-xl border border-border bg-surface text-2xl tracking-[0.5em] text-center font-mono outline-none focus:ring-2 focus:ring-ring"
+              placeholder="••••••"
+            />
+            <button
+              onClick={onDone} disabled={otp.length !== 6}
+              className="mt-4 h-12 rounded-xl bg-primary text-primary-foreground font-semibold disabled:opacity-40 active:scale-[0.98] transition"
+            >
+              Sign in
+            </button>
+            <button onClick={() => setStep("email")} className="mt-3 text-sm text-muted-foreground">
+              Use a different email
+            </button>
+          </>
         )}
-        {screen.name === "checkin" && (
-          <CheckIn
-            worker={workers.find((w) => w.id === screen.workerId)!}
-            done={() => {
-              setWorkers((ws) => ws.map((w) => w.id === screen.workerId ? { ...w, present: true, days: w.days + (w.present ? 0 : 1) } : w));
-              setScreen({ name: "tabs" });
-              setTab("home");
-            }}
-            back={() => setScreen({ name: "tabs" })}
-          />
-        )}
-        {screen.name === "payout" && (
-          <Payout workers={workers} back={() => setScreen({ name: "tabs" })} done={() => { setScreen({ name: "tabs" }); setTab("wages"); }} />
-        )}
-        {screen.name === "worker" && (
-          <WorkerProfile worker={workers.find((w) => w.id === screen.workerId) || POOL.find((w) => w.id === screen.workerId)!} back={() => setScreen({ name: "tabs" })} />
-        )}
+
+        <div className="mt-auto pt-8 text-xs text-muted-foreground text-center">
+          By signing in you agree to TillTask's Terms & Privacy.
+        </div>
       </div>
     </div>
   );
 }
 
-/* ---------- Splash ---------- */
-function Splash({ onDone }: { onDone: () => void }) {
+/* ---------------- Top Bar ---------------- */
+function TopBar({ onBell }: { onBell: () => void }) {
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-between p-8 bg-gradient-to-b from-[oklch(0.78_0.16_60)] to-[oklch(0.65_0.18_45)]">
-      <div className="flex-1 flex flex-col items-center justify-center text-center">
-        <div className="w-24 h-24 rounded-3xl bg-foreground/90 flex items-center justify-center shadow-2xl mb-6 rotate-6">
-          <HardHat className="w-12 h-12 text-primary" />
+    <header className="sticky top-0 z-30 bg-background/85 backdrop-blur border-b border-border">
+      <div className="max-w-screen-xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-3">
+        <div className="h-8 w-8 rounded-lg bg-primary grid place-items-center shrink-0">
+          <Timer className="size-4 text-primary-foreground" />
         </div>
-        <h1 className="text-4xl font-extrabold tracking-tight text-foreground">SiteSarthi</h1>
-        <p className="mt-2 text-foreground/70 font-medium">Tumhari site, tumhara hisaab.</p>
+        <div className="min-w-0">
+          <div className="font-bold text-sm leading-none truncate">TillTask</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5 truncate">Acme Inc · Admin</div>
+        </div>
+        <div className="ml-auto flex items-center gap-1">
+          <button className="h-9 w-9 grid place-items-center rounded-lg hover:bg-secondary" aria-label="Search">
+            <Search className="size-4" />
+          </button>
+          <button onClick={onBell} className="h-9 w-9 grid place-items-center rounded-lg hover:bg-secondary relative" aria-label="Notifications">
+            <Bell className="size-4" />
+            <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-destructive" />
+          </button>
+          <div className="h-8 w-8 rounded-full bg-accent grid place-items-center text-xs font-bold ml-1">AD</div>
+        </div>
       </div>
-      <button
-        onClick={onDone}
-        className="w-full h-14 rounded-2xl bg-foreground text-background font-semibold text-base shadow-xl active:scale-[0.98] transition"
-      >
-        Get started
+    </header>
+  );
+}
+
+/* ---------------- Bottom Nav ---------------- */
+function BottomNav({ tab, setTab }: { tab: string; setTab: (t: any) => void }) {
+  const items = [
+    { id: "home", label: "Home", icon: LayoutDashboard },
+    { id: "team", label: "Team", icon: Users },
+    { id: "track", label: "Track", icon: Clock },
+    { id: "projects", label: "Projects", icon: FolderKanban },
+    { id: "reports", label: "Reports", icon: BarChart3 },
+  ];
+  return (
+    <nav className="fixed bottom-0 inset-x-0 z-30 bg-background/95 backdrop-blur border-t border-border">
+      <div className="max-w-screen-xl mx-auto grid grid-cols-5 px-2 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))]">
+        {items.map((it) => {
+          const active = tab === it.id;
+          return (
+            <button
+              key={it.id} onClick={() => setTab(it.id)}
+              className={`flex flex-col items-center gap-1 py-1.5 rounded-lg text-[11px] font-medium transition ${
+                active ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
+              <it.icon className={`size-5 ${active ? "stroke-[2.5]" : ""}`} />
+              {it.label}
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
+/* ---------------- Dashboard ---------------- */
+function Dashboard({
+  onOpenEmp, onClock, onShot,
+}: { onOpenEmp: (id: string) => void; onClock: () => void; onShot: (s: Screenshot) => void }) {
+  const stats = useMemo(() => {
+    const online = EMPLOYEES.filter((e) => e.status === "online").length;
+    const idle = EMPLOYEES.filter((e) => e.status === "idle").length;
+    const offline = EMPLOYEES.filter((e) => e.status === "offline").length;
+    const hours = EMPLOYEES.reduce((a, e) => a + e.todayHours, 0);
+    const avgProd = Math.round(EMPLOYEES.reduce((a, e) => a + e.productivity, 0) / EMPLOYEES.length);
+    return { online, idle, offline, hours, avgProd };
+  }, []);
+
+  return (
+    <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-5 space-y-5">
+      <section>
+        <div className="flex items-end justify-between gap-3 mb-1">
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground">Today · Mon, Jun 15</p>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight truncate">Good morning, Admin</h1>
+          </div>
+          <button onClick={onClock} className="shrink-0 h-10 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center gap-2 active:scale-95 transition">
+            <Play className="size-4" /> <span className="hidden xs:inline">Clock</span>
+          </button>
+        </div>
+      </section>
+
+      {/* Live stats — responsive grid */}
+      <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <StatCard icon={<Circle className="size-4 text-emerald-600 fill-emerald-600" />} label="Online" value={stats.online} sub={`${EMPLOYEES.length} total`} accent="emerald" />
+        <StatCard icon={<Activity className="size-4 text-amber-600" />} label="Idle" value={stats.idle} sub="5m+ no activity" accent="amber" />
+        <StatCard icon={<Clock className="size-4 text-foreground" />} label="Hours today" value={stats.hours.toFixed(1)} sub="vs 42h yest." accent="neutral" />
+        <StatCard icon={<TrendingUp className="size-4 text-indigo-600" />} label="Productivity" value={`${stats.avgProd}%`} sub="+4% this week" accent="indigo" />
+      </section>
+
+      {/* Productivity chart */}
+      <section className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-semibold">Team productivity</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Last 7 days</p>
+          </div>
+          <button className="text-xs text-muted-foreground flex items-center gap-1 hover:text-foreground">
+            This week <ChevronRight className="size-3" />
+          </button>
+        </div>
+        <MiniChart data={[68, 74, 71, 82, 79, 88, 84]} labels={["M", "T", "W", "T", "F", "S", "S"]} />
+      </section>
+
+      {/* Active employees */}
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold">Active employees</h2>
+          <button className="text-xs text-primary font-medium">See all</button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {EMPLOYEES.slice(0, 5).map((e) => (
+            <EmployeeRow key={e.id} emp={e} onClick={() => onOpenEmp(e.id)} />
+          ))}
+        </div>
+      </section>
+
+      {/* Recent screenshots */}
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="font-semibold">Recent screenshots</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Auto-captured · 10 min interval</p>
+          </div>
+          <button className="text-xs text-primary font-medium">Timeline</button>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+          {SCREENSHOTS.map((s) => <ShotThumb key={s.id} shot={s} onClick={() => onShot(s)} />)}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/* ---------------- Team / Employee Directory ---------------- */
+function TeamScreen({ onOpen }: { onOpen: (id: string) => void }) {
+  const [filter, setFilter] = useState<"all" | Status>("all");
+  const list = EMPLOYEES.filter((e) => filter === "all" || e.status === filter);
+
+  return (
+    <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-5 space-y-4">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Team</h1>
+        <p className="text-sm text-muted-foreground mt-1">{EMPLOYEES.length} employees · {EMPLOYEES.filter(e=>e.status==="online").length} online</p>
+      </div>
+
+      <div className="flex gap-2 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 pb-1 scrollbar-none">
+        {(["all", "online", "idle", "offline"] as const).map((k) => (
+          <button
+            key={k} onClick={() => setFilter(k)}
+            className={`shrink-0 h-9 px-4 rounded-full text-xs font-semibold capitalize border transition ${
+              filter === k ? "bg-foreground text-background border-foreground" : "bg-surface border-border text-muted-foreground"
+            }`}
+          >
+            {k} {k !== "all" && `· ${EMPLOYEES.filter(e=>e.status===k).length}`}
+          </button>
+        ))}
+        <button className="shrink-0 h-9 w-9 grid place-items-center rounded-full bg-surface border border-border ml-auto">
+          <Filter className="size-4 text-muted-foreground" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+        {list.map((e) => <EmployeeRow key={e.id} emp={e} onClick={() => onOpen(e.id)} />)}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Tracking ---------------- */
+function TrackingScreen({ onClock }: { onClock: () => void }) {
+  const [running, setRunning] = useState(true);
+  const [seconds, setSeconds] = useState(2 * 3600 + 14 * 60 + 22);
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => setSeconds((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [running]);
+
+  const hh = Math.floor(seconds / 3600).toString().padStart(2, "0");
+  const mm = Math.floor((seconds % 3600) / 60).toString().padStart(2, "0");
+  const ss = (seconds % 60).toString().padStart(2, "0");
+
+  return (
+    <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-5 space-y-5">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Time tracking</h1>
+        <p className="text-sm text-muted-foreground mt-1">Project · TillTask Web</p>
+      </div>
+
+      <div className="rounded-3xl bg-gradient-to-br from-primary/20 via-primary/10 to-transparent border border-primary/20 p-6 sm:p-8 text-center">
+        <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">Current session</p>
+        <div className="font-mono text-5xl sm:text-6xl font-bold tabular-nums tracking-tight">
+          {hh}:{mm}:<span className="text-primary">{ss}</span>
+        </div>
+        <p className="text-sm text-muted-foreground mt-3">Activity 87% · 12 screenshots captured</p>
+        <div className="flex justify-center gap-2 mt-6">
+          <button onClick={() => setRunning((r) => !r)} className="h-12 px-6 rounded-2xl bg-foreground text-background font-semibold flex items-center gap-2 active:scale-95 transition">
+            {running ? <><Pause className="size-4" /> Pause</> : <><Play className="size-4" /> Resume</>}
+          </button>
+          <button className="h-12 px-5 rounded-2xl bg-surface border border-border font-semibold flex items-center gap-2"><Coffee className="size-4" /> Break</button>
+          <button onClick={onClock} className="h-12 w-12 grid place-items-center rounded-2xl bg-destructive/10 text-destructive border border-destructive/20"><Square className="size-4 fill-destructive" /></button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <MiniStat icon={<Activity className="size-4" />} label="Active" value="87%" />
+        <MiniStat icon={<MousePointer className="size-4" />} label="Clicks" value="2.1k" />
+        <MiniStat icon={<Keyboard className="size-4" />} label="Keys" value="14k" />
+      </div>
+
+      <section>
+        <h2 className="font-semibold mb-3">Today's sessions</h2>
+        <div className="rounded-2xl border border-border bg-card divide-y divide-border overflow-hidden">
+          {[
+            { t: "TillTask Web", s: "09:02", e: "11:16", h: "2h 14m" },
+            { t: "Standup", s: "11:30", e: "12:00", h: "30m" },
+            { t: "TillTask Web", s: "13:05", e: "—", h: "ongoing" },
+          ].map((r, i) => (
+            <div key={i} className="px-4 py-3 flex items-center gap-3">
+              <div className="h-9 w-9 rounded-lg bg-primary/10 grid place-items-center shrink-0">
+                <Timer className="size-4 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-sm truncate">{r.t}</div>
+                <div className="text-xs text-muted-foreground">{r.s} → {r.e}</div>
+              </div>
+              <div className="text-sm font-semibold tabular-nums">{r.h}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="font-semibold mb-3">Attendance · this week</h2>
+        <div className="grid grid-cols-7 gap-1.5">
+          {["M","T","W","T","F","S","S"].map((d,i)=>{
+            const states = ["full","full","full","full","half","off","off"];
+            const st = states[i];
+            return (
+              <div key={i} className={`aspect-square rounded-xl grid place-items-center text-xs font-bold ${
+                st==="full" ? "bg-emerald-500/15 text-emerald-700" :
+                st==="half" ? "bg-amber-500/20 text-amber-700" : "bg-muted text-muted-foreground"
+              }`}>{d}</div>
+            );
+          })}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/* ---------------- Projects ---------------- */
+function ProjectsScreen() {
+  return (
+    <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
+          <p className="text-sm text-muted-foreground mt-1">{PROJECTS.length} active · 330 tracked hours</p>
+        </div>
+        <button className="h-10 w-10 grid place-items-center rounded-xl bg-foreground text-background"><Plus className="size-4" /></button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {PROJECTS.map((p) => (
+          <div key={p.id} className="rounded-2xl border border-border bg-card p-4 hover:shadow-md transition">
+            <div className="flex items-start gap-3 mb-3">
+              <div className={`h-10 w-10 rounded-xl ${p.color} grid place-items-center shrink-0`}>
+                <FolderKanban className="size-5 text-white" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-semibold truncate">{p.name}</h3>
+                <p className="text-xs text-muted-foreground truncate">{p.client}</p>
+              </div>
+              <button className="h-7 w-7 grid place-items-center rounded-lg hover:bg-secondary">
+                <MoreVertical className="size-4 text-muted-foreground" />
+              </button>
+            </div>
+            <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3">
+              <span className="flex items-center gap-1"><Users className="size-3.5" /> {p.members}</span>
+              <span className="flex items-center gap-1"><Clock className="size-3.5" /> {p.hours}h</span>
+              <span className="ml-auto font-semibold text-foreground">{p.progress}%</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+              <div className={`h-full ${p.color}`} style={{ width: `${p.progress}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <section className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+        <h2 className="font-semibold mb-3">Time by project · this week</h2>
+        <div className="space-y-3">
+          {PROJECTS.map((p) => (
+            <div key={p.id}>
+              <div className="flex justify-between text-xs mb-1.5">
+                <span className="font-medium truncate">{p.name}</span>
+                <span className="text-muted-foreground tabular-nums shrink-0 ml-2">{p.hours}h</span>
+              </div>
+              <div className="h-2 rounded-full bg-muted overflow-hidden">
+                <div className={`h-full ${p.color}`} style={{ width: `${(p.hours/142)*100}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/* ---------------- Reports ---------------- */
+function ReportsScreen() {
+  const [range, setRange] = useState<"day"|"week"|"month">("week");
+  return (
+    <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-5 space-y-5">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
+        <p className="text-sm text-muted-foreground mt-1">Productivity & attendance insights</p>
+      </div>
+
+      <div className="inline-flex rounded-xl bg-secondary p-1 text-xs font-semibold">
+        {(["day","week","month"] as const).map((r) => (
+          <button key={r} onClick={()=>setRange(r)}
+            className={`px-4 h-8 rounded-lg capitalize ${range===r?"bg-background shadow-sm":"text-muted-foreground"}`}>
+            {r}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard icon={<Clock className="size-4" />} label="Total hours" value="312h" sub="+8% vs last" accent="neutral" />
+        <StatCard icon={<TrendingUp className="size-4 text-emerald-600" />} label="Avg productivity" value="84%" sub="+4%" accent="emerald" />
+        <StatCard icon={<CheckCircle2 className="size-4 text-indigo-600" />} label="Attendance" value="96%" sub="2 absences" accent="indigo" />
+        <StatCard icon={<Activity className="size-4 text-amber-600" />} label="Avg activity" value="78%" sub="healthy" accent="amber" />
+      </div>
+
+      <section className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+        <h2 className="font-semibold mb-4">Hours by day</h2>
+        <MiniChart data={[42, 48, 51, 46, 52, 18, 8]} labels={["M","T","W","T","F","S","S"]} colorClass="bg-foreground" />
+      </section>
+
+      <section>
+        <h2 className="font-semibold mb-3">Top performers</h2>
+        <div className="rounded-2xl border border-border bg-card overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-muted-foreground border-b border-border">
+                <th className="px-4 py-2.5 font-medium">Employee</th>
+                <th className="px-2 py-2.5 font-medium text-right">Hours</th>
+                <th className="px-4 py-2.5 font-medium text-right">Prod</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...EMPLOYEES].sort((a,b)=>b.productivity-a.productivity).slice(0,5).map((e,i) => (
+                <tr key={e.id} className="border-b border-border last:border-0">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="text-xs font-bold text-muted-foreground w-4 shrink-0">{i+1}</span>
+                      <div className="h-8 w-8 rounded-full bg-accent grid place-items-center text-[11px] font-bold shrink-0">{e.avatar}</div>
+                      <div className="min-w-0">
+                        <div className="font-medium text-sm truncate">{e.name}</div>
+                        <div className="text-[11px] text-muted-foreground truncate">{e.role}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-2 py-3 text-right tabular-nums text-sm">{e.todayHours}h</td>
+                  <td className="px-4 py-3 text-right">
+                    <span className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-700">
+                      {e.productivity}% <ArrowUpRight className="size-3" />
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <button className="w-full h-12 rounded-xl border border-border bg-surface font-semibold text-sm flex items-center justify-center gap-2 hover:bg-secondary">
+        <ArrowDownRight className="size-4" /> Export {range} report (CSV)
       </button>
     </div>
   );
 }
 
-/* ---------- Login ---------- */
-function Login({ onDone }: { onDone: () => void }) {
-  const [phone, setPhone] = useState("98765 43210");
-  const [otp, setOtp] = useState("");
-  const [step, setStep] = useState<"phone" | "otp">("phone");
-
+/* ---------------- Employee Profile ---------------- */
+function EmployeeProfile({ emp, onBack }: { emp: Employee; onBack: () => void }) {
   return (
-    <div className="absolute inset-0 flex flex-col p-6 pt-14">
-      <div className="w-14 h-14 rounded-2xl bg-primary/15 flex items-center justify-center mb-8">
-        <HardHat className="w-7 h-7 text-primary" />
+    <div className="max-w-screen-xl mx-auto">
+      <div className="px-4 sm:px-6 pt-4">
+        <button onClick={onBack} className="text-sm text-muted-foreground flex items-center gap-1 mb-3">
+          <X className="size-4" /> Close
+        </button>
       </div>
-      <h2 className="text-3xl font-extrabold tracking-tight">{step === "phone" ? "Welcome back" : "Verify number"}</h2>
-      <p className="text-muted-foreground mt-1 mb-8">
-        {step === "phone" ? "Login with your contractor phone number" : "We sent a 6-digit code to +91 " + phone}
-      </p>
 
-      {step === "phone" ? (
-        <>
-          <label className="text-sm font-medium mb-2 text-muted-foreground">Phone number</label>
-          <div className="flex items-center gap-2 h-14 px-4 rounded-2xl border border-border bg-surface focus-within:ring-2 ring-primary">
-            <span className="font-semibold">+91</span>
-            <input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="flex-1 bg-transparent outline-none text-lg tracking-wide"
-              placeholder="98765 43210"
-            />
+      <div className="px-4 sm:px-6 pb-5">
+        <div className="rounded-3xl bg-gradient-to-br from-accent to-secondary p-6 flex items-center gap-4">
+          <div className="h-16 w-16 rounded-2xl bg-background grid place-items-center text-lg font-bold shrink-0">{emp.avatar}</div>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl font-bold truncate">{emp.name}</h1>
+            <p className="text-sm text-muted-foreground truncate">{emp.role} · {emp.team}</p>
+            <div className="flex items-center gap-2 mt-2">
+              <StatusDot s={emp.status} />
+              <span className="text-xs font-medium capitalize">{emp.status} · {emp.lastActive}</span>
+            </div>
           </div>
-          <button
-            onClick={() => setStep("otp")}
-            className="mt-auto h-14 rounded-2xl bg-primary text-primary-foreground font-semibold text-base shadow-lg shadow-primary/30 active:scale-[0.98] transition"
-          >
-            Send OTP
-          </button>
-        </>
-      ) : (
-        <>
-          <label className="text-sm font-medium mb-2 text-muted-foreground">Enter OTP</label>
-          <input
-            value={otp}
-            onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            placeholder="● ● ● ● ● ●"
-            className="h-16 px-4 rounded-2xl border border-border bg-surface outline-none text-center text-2xl font-bold tracking-[0.6em] focus:ring-2 ring-primary"
-          />
-          <p className="text-xs text-muted-foreground mt-3">Demo: tap continue with any code</p>
-          <button
-            onClick={onDone}
-            className="mt-auto h-14 rounded-2xl bg-primary text-primary-foreground font-semibold text-base shadow-lg shadow-primary/30 active:scale-[0.98] transition"
-          >
-            Continue
-          </button>
-        </>
-      )}
-    </div>
-  );
-}
-
-/* ---------- Tabs container ---------- */
-function Tabs(props: {
-  tab: "home" | "workers" | "pool" | "wages";
-  setTab: (t: "home" | "workers" | "pool" | "wages") => void;
-  workers: Worker[];
-  openSite: (id: string) => void;
-  openWorker: (id: string) => void;
-  openPayout: () => void;
-}) {
-  const { tab, setTab, workers, openSite, openWorker, openPayout } = props;
-  return (
-    <div className="absolute inset-0 flex flex-col">
-      <div className="flex-1 overflow-y-auto pb-24">
-        {tab === "home" && <Home workers={workers} openSite={openSite} openPayout={openPayout} />}
-        {tab === "workers" && <WorkersTab workers={workers} openWorker={openWorker} />}
-        {tab === "pool" && <PoolTab openWorker={openWorker} />}
-        {tab === "wages" && <WagesTab workers={workers} openPayout={openPayout} />}
-      </div>
-      <BottomNav tab={tab} setTab={setTab} />
-    </div>
-  );
-}
-
-/* ---------- Home ---------- */
-function Home({ workers, openSite, openPayout }: { workers: Worker[]; openSite: (id: string) => void; openPayout: () => void }) {
-  const present = workers.filter((w) => w.present).length;
-  const totalToday = workers.reduce((s, w) => s + (w.present ? w.rate : 0), 0);
-
-  return (
-    <div className="px-5 pt-12">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <p className="text-sm text-muted-foreground">Good morning,</p>
-          <h1 className="text-2xl font-extrabold tracking-tight">Rajesh ji 👋</h1>
         </div>
-        <button className="w-11 h-11 rounded-full bg-surface border border-border flex items-center justify-center relative">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-2 right-2.5 w-2 h-2 rounded-full bg-destructive" />
-        </button>
-      </div>
 
-      {/* Hero card */}
-      <div className="rounded-3xl p-5 bg-gradient-to-br from-foreground to-[oklch(0.28_0.03_60)] text-background shadow-xl">
-        <div className="flex items-center gap-2 text-background/70 text-xs font-medium">
-          <Calendar className="w-3.5 h-3.5" /> Today, {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+        <div className="grid grid-cols-3 gap-3 mt-4">
+          <MiniStat icon={<Clock className="size-4" />} label="Today" value={`${emp.todayHours}h`} />
+          <MiniStat icon={<Activity className="size-4" />} label="Activity" value={`${emp.activity}%`} />
+          <MiniStat icon={<Target className="size-4" />} label="Score" value={`${emp.productivity}`} />
         </div>
-        <div className="mt-2 flex items-end gap-1">
-          <span className="text-4xl font-extrabold tracking-tight">{fmt(totalToday)}</span>
-        </div>
-        <p className="text-background/60 text-sm">Wages accrued today</p>
-        <div className="mt-4 grid grid-cols-3 gap-3 text-center">
-          <Stat label="Present" value={`${present}/${workers.length}`} />
-          <Stat label="Sites" value={`${SITES.filter(s => s.status === "Active").length}`} />
-          <Stat label="Pending" value={fmt(workers.reduce((s,w) => s + w.rate * w.days - w.advance, 0))} small />
-        </div>
-        <button onClick={openPayout} className="mt-5 w-full h-12 rounded-2xl bg-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 active:scale-[0.98] transition">
-          <Send className="w-4 h-4" /> Pay this week
-        </button>
-      </div>
 
-      {/* Quick actions */}
-      <div className="grid grid-cols-4 gap-3 mt-6">
-        <QuickAction icon={Scan} label="Check-in" />
-        <QuickAction icon={Plus} label="Add site" />
-        <QuickAction icon={Users} label="Hire" />
-        <QuickAction icon={IndianRupee} label="Advance" />
-      </div>
+        <section className="mt-5">
+          <h2 className="font-semibold mb-3">Activity timeline · today</h2>
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <div className="h-3 rounded-full overflow-hidden flex">
+              <div className="bg-emerald-500" style={{ width: "62%" }} />
+              <div className="bg-amber-500" style={{ width: "18%" }} />
+              <div className="bg-muted" style={{ width: "20%" }} />
+            </div>
+            <div className="flex justify-between text-[11px] text-muted-foreground mt-2 tabular-nums">
+              <span>09:00</span><span>13:00</span><span>18:00</span>
+            </div>
+            <div className="flex gap-4 mt-3 text-xs">
+              <span className="flex items-center gap-1.5"><div className="h-2 w-2 rounded-full bg-emerald-500" /> Active 4h 28m</span>
+              <span className="flex items-center gap-1.5"><div className="h-2 w-2 rounded-full bg-amber-500" /> Idle 1h 18m</span>
+              <span className="flex items-center gap-1.5"><div className="h-2 w-2 rounded-full bg-muted" /> Off</span>
+            </div>
+          </div>
+        </section>
 
-      {/* Sites */}
-      <div className="mt-7 flex items-center justify-between">
-        <h2 className="text-base font-bold">My sites</h2>
-        <button className="text-sm font-medium text-primary flex items-center">View all <ChevronRight className="w-4 h-4" /></button>
-      </div>
-      <div className="mt-3 space-y-3">
-        {SITES.map((s) => (
-          <button key={s.id} onClick={() => openSite(s.id)} className="w-full text-left rounded-2xl p-4 bg-surface border border-border active:scale-[0.99] transition">
-            <div className="flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold truncate">{s.name}</h3>
+        <section className="mt-5">
+          <h2 className="font-semibold mb-3">Assigned projects</h2>
+          <div className="space-y-2">
+            {PROJECTS.slice(0, 2).map((p) => (
+              <div key={p.id} className="rounded-xl border border-border bg-card p-3 flex items-center gap-3">
+                <div className={`h-9 w-9 rounded-lg ${p.color} grid place-items-center shrink-0`}>
+                  <FolderKanban className="size-4 text-white" />
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                  <MapPin className="w-3 h-3" /> {s.address}
-                </p>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm truncate">{p.name}</div>
+                  <div className="text-xs text-muted-foreground">{p.hours}h tracked</div>
+                </div>
+                <ChevronRight className="size-4 text-muted-foreground" />
               </div>
-              <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${s.status === "Active" ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}>
-                {s.status === "Active" ? "● LIVE" : "IDLE"}
-              </span>
-            </div>
-            <div className="mt-3 flex items-center gap-4 text-sm">
-              <div className="flex items-center gap-1.5 text-muted-foreground"><Users className="w-4 h-4" /><span className="font-semibold text-foreground">{s.workers}</span> workers</div>
-              <div className="flex items-center gap-1.5 text-muted-foreground"><Wallet className="w-4 h-4" /><span className="font-semibold text-foreground">{fmt(s.payroll)}</span> /wk</div>
-            </div>
-          </button>
-        ))}
+            ))}
+          </div>
+        </section>
+
+        <section className="mt-5">
+          <h2 className="font-semibold mb-3">Recent screenshots</h2>
+          <div className="grid grid-cols-3 gap-2">
+            {SCREENSHOTS.slice(0, 6).map((s) => (
+              <div key={s.id} className="aspect-video rounded-lg bg-gradient-to-br from-secondary to-accent border border-border grid place-items-center">
+                <ImageIcon className="size-5 text-muted-foreground" />
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );
 }
 
-function Stat({ label, value, small }: { label: string; value: string; small?: boolean }) {
+/* ---------------- Reusable bits ---------------- */
+function StatCard({ icon, label, value, sub, accent }: {
+  icon: React.ReactNode; label: string; value: string|number; sub: string;
+  accent: "emerald"|"amber"|"indigo"|"neutral";
+}) {
+  const accentBg = {
+    emerald: "bg-emerald-500/10", amber: "bg-amber-500/10",
+    indigo: "bg-indigo-500/10", neutral: "bg-secondary",
+  }[accent];
   return (
-    <div className="bg-background/10 rounded-xl py-2.5">
-      <div className={`font-bold ${small ? "text-sm" : "text-lg"}`}>{value}</div>
-      <div className="text-[10px] text-background/60 uppercase tracking-wide font-medium">{label}</div>
+    <div className="rounded-2xl border border-border bg-card p-3.5">
+      <div className={`h-8 w-8 rounded-lg ${accentBg} grid place-items-center mb-2.5`}>{icon}</div>
+      <div className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide truncate">{label}</div>
+      <div className="text-xl sm:text-2xl font-bold tabular-nums mt-0.5">{value}</div>
+      <div className="text-[11px] text-muted-foreground mt-0.5 truncate">{sub}</div>
     </div>
   );
 }
 
-function QuickAction({ icon: Icon, label }: { icon: any; label: string }) {
+function MiniStat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <button className="flex flex-col items-center gap-1.5 active:scale-95 transition">
-      <div className="w-14 h-14 rounded-2xl bg-surface border border-border flex items-center justify-center">
-        <Icon className="w-5 h-5 text-primary" />
+    <div className="rounded-xl border border-border bg-card px-3 py-2.5 text-center">
+      <div className="flex justify-center text-muted-foreground mb-1">{icon}</div>
+      <div className="text-base font-bold tabular-nums leading-none">{value}</div>
+      <div className="text-[10px] text-muted-foreground uppercase tracking-wide mt-1">{label}</div>
+    </div>
+  );
+}
+
+function EmployeeRow({ emp, onClick }: { emp: Employee; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="w-full text-left rounded-xl border border-border bg-card p-3 flex items-center gap-3 hover:shadow-md hover:border-primary/30 transition">
+      <div className="relative shrink-0">
+        <div className="h-10 w-10 rounded-full bg-accent grid place-items-center text-xs font-bold">{emp.avatar}</div>
+        <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card ${
+          emp.status==="online"?"bg-emerald-500":emp.status==="idle"?"bg-amber-500":"bg-muted-foreground/40"
+        }`} />
       </div>
-      <span className="text-[11px] font-medium">{label}</span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <div className="font-semibold text-sm truncate">{emp.name}</div>
+        </div>
+        <div className="text-[11px] text-muted-foreground truncate">{emp.role} · {emp.project}</div>
+      </div>
+      <div className="text-right shrink-0">
+        <div className="text-sm font-bold tabular-nums">{emp.todayHours}h</div>
+        <div className={`text-[10px] font-semibold ${
+          emp.activity>=70?"text-emerald-600":emp.activity>=40?"text-amber-600":"text-muted-foreground"
+        }`}>{emp.activity}% active</div>
+      </div>
     </button>
   );
 }
 
-/* ---------- Site Detail ---------- */
-function SiteDetail({ site, workers, back, checkin, payout }: { site: Site; workers: Worker[]; back: () => void; checkin: (wid: string) => void; payout: () => void; }) {
-  const present = workers.filter(w => w.present);
-  const absent = workers.filter(w => !w.present);
+function StatusDot({ s }: { s: Status }) {
+  const c = s==="online"?"bg-emerald-500":s==="idle"?"bg-amber-500":"bg-muted-foreground/50";
+  return <span className={`h-2 w-2 rounded-full ${c}`} />;
+}
 
+function ShotThumb({ shot, onClick }: { shot: Screenshot; onClick: () => void }) {
   return (
-    <div className="absolute inset-0 flex flex-col">
-      <header className="px-5 pt-12 pb-4 bg-gradient-to-b from-primary/20 to-background">
-        <button onClick={back} className="w-10 h-10 rounded-full bg-surface border border-border flex items-center justify-center mb-3">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <h1 className="text-2xl font-extrabold tracking-tight">{site.name}</h1>
-        <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1"><MapPin className="w-3 h-3" /> {site.address}</p>
-        <div className="mt-4 grid grid-cols-3 gap-2">
-          <Pill label="Present" value={`${present.length}`} tone="success" />
-          <Pill label="Absent" value={`${absent.length}`} tone="warning" />
-          <Pill label="Wage today" value={fmt(present.reduce((s,w)=>s+w.rate,0))} tone="default" />
-        </div>
-      </header>
+    <button onClick={onClick} className="text-left group">
+      <div className="aspect-video rounded-xl bg-gradient-to-br from-secondary via-accent to-secondary border border-border grid place-items-center relative overflow-hidden group-hover:border-primary/40 transition">
+        <Monitor className="size-6 text-muted-foreground" />
+        <span className="absolute top-1.5 right-1.5 text-[10px] px-1.5 py-0.5 rounded bg-background/90 font-bold tabular-nums">{shot.activity}%</span>
+      </div>
+      <div className="mt-1.5 px-0.5">
+        <div className="text-[11px] font-semibold truncate">{shot.emp}</div>
+        <div className="text-[10px] text-muted-foreground">{shot.time} · {shot.app}</div>
+      </div>
+    </button>
+  );
+}
 
-      <div className="flex-1 overflow-y-auto px-5">
-        <div className="flex items-center justify-between mt-5 mb-3">
-          <h2 className="font-bold">Muster roll · Today</h2>
-          <span className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" /> 09:42 AM</span>
+function MiniChart({ data, labels, colorClass = "bg-primary" }: { data: number[]; labels: string[]; colorClass?: string }) {
+  const max = Math.max(...data);
+  return (
+    <div className="flex items-end gap-1.5 sm:gap-2 h-32">
+      {data.map((v, i) => (
+        <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
+          <div className="w-full flex-1 flex items-end">
+            <div className={`w-full rounded-t-md ${colorClass} transition-all`} style={{ height: `${(v/max)*100}%` }} />
+          </div>
+          <div className="text-[10px] text-muted-foreground font-medium">{labels[i]}</div>
         </div>
+      ))}
+    </div>
+  );
+}
 
-        <div className="space-y-2">
-          {workers.map((w) => (
-            <div key={w.id} className="flex items-center gap-3 p-3 rounded-2xl bg-surface border border-border">
-              <Avatar w={w} />
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold truncate">{w.name}</div>
-                <div className="text-xs text-muted-foreground">{w.skill} · {fmt(w.rate)}/day</div>
+/* ---------------- Modals & Sheets ---------------- */
+function NotifSheet({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" />
+      <div onClick={(e)=>e.stopPropagation()} className="relative w-full sm:max-w-md bg-background rounded-t-3xl sm:rounded-3xl border border-border max-h-[80vh] flex flex-col">
+        <div className="p-5 border-b border-border flex items-center justify-between">
+          <div>
+            <h2 className="font-bold text-lg">Alerts</h2>
+            <p className="text-xs text-muted-foreground">3 unread</p>
+          </div>
+          <button onClick={onClose} className="h-8 w-8 grid place-items-center rounded-lg hover:bg-secondary"><X className="size-4" /></button>
+        </div>
+        <div className="overflow-y-auto p-3 space-y-2">
+          {NOTIFICATIONS.map((n) => (
+            <div key={n.id} className="rounded-xl border border-border bg-card p-3 flex items-start gap-3">
+              <div className={`h-9 w-9 rounded-lg grid place-items-center shrink-0 ${
+                n.type==="idle"?"bg-amber-500/15 text-amber-700":
+                n.type==="missing"?"bg-rose-500/15 text-rose-700":"bg-indigo-500/15 text-indigo-700"
+              }`}>
+                <AlertCircle className="size-4" />
               </div>
-              {w.present ? (
-                <div className="flex items-center gap-1 text-success font-semibold text-xs">
-                  <CheckCircle2 className="w-4 h-4" /> IN
-                </div>
-              ) : (
-                <button onClick={() => checkin(w.id)} className="px-3 h-9 rounded-xl bg-primary text-primary-foreground text-xs font-bold active:scale-95">
-                  Check in
-                </button>
-              )}
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-sm truncate">{n.title}</div>
+                <div className="text-xs text-muted-foreground">{n.desc}</div>
+              </div>
+              <span className="text-[10px] text-muted-foreground shrink-0">{n.time}</span>
             </div>
           ))}
         </div>
       </div>
-
-      <div className="p-5 border-t border-border bg-surface/80 backdrop-blur">
-        <button onClick={payout} className="w-full h-14 rounded-2xl bg-foreground text-background font-semibold flex items-center justify-center gap-2 active:scale-[0.98]">
-          <Send className="w-4 h-4" /> Run weekly payout
-        </button>
-      </div>
     </div>
   );
 }
 
-function Pill({ label, value, tone }: { label: string; value: string; tone: "success" | "warning" | "default" }) {
-  const cls = tone === "success" ? "bg-success/15 text-success" : tone === "warning" ? "bg-warning/25 text-warning-foreground" : "bg-surface text-foreground border border-border";
-  return (
-    <div className={`rounded-xl px-3 py-2 ${cls}`}>
-      <div className="text-[10px] font-bold uppercase opacity-80">{label}</div>
-      <div className="font-bold">{value}</div>
-    </div>
-  );
-}
-
-/* ---------- Check-in (face + geofence) ---------- */
-function CheckIn({ worker, done, back }: { worker: Worker; done: () => void; back: () => void }) {
-  const [step, setStep] = useState<"scan" | "verify" | "done">("scan");
+function ClockModal({ onClose }: { onClose: () => void }) {
+  const [step, setStep] = useState<"choose"|"done">("choose");
+  const [action, setAction] = useState<"in"|"out"|"break"|null>(null);
+  const doIt = (a: "in"|"out"|"break") => { setAction(a); setStep("done"); };
 
   return (
-    <div className="absolute inset-0 flex flex-col bg-foreground text-background">
-      <header className="p-5 pt-12 flex items-center justify-between">
-        <button onClick={back} className="w-10 h-10 rounded-full bg-background/10 flex items-center justify-center">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <span className="text-xs font-semibold tracking-widest opacity-70">FACE CHECK-IN</span>
-        <div className="w-10" />
-      </header>
-
-      <div className="flex-1 flex flex-col items-center justify-center px-6">
-        <div className="text-center mb-6">
-          <p className="text-sm opacity-60">Checking in</p>
-          <h1 className="text-2xl font-bold">{worker.name}</h1>
-        </div>
-
-        <div className="relative w-64 h-64 rounded-full border-4 border-dashed border-primary/40 flex items-center justify-center mb-8">
-          <div className="w-56 h-56 rounded-full bg-gradient-to-br from-primary/30 to-primary/5 flex items-center justify-center text-5xl font-extrabold">
-            {worker.avatar}
-          </div>
-          {step !== "done" && (
-            <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin" style={{ animationDuration: "2s" }} />
-          )}
-          {step === "done" && (
-            <div className="absolute inset-0 rounded-full bg-success/20 flex items-center justify-center">
-              <CheckCircle2 className="w-20 h-20 text-success" />
-            </div>
-          )}
-        </div>
-
-        <div className="w-full space-y-3 max-w-xs">
-          <Row icon={Camera} label="Face match" ok={step !== "scan"} />
-          <Row icon={MapPin} label="Inside site geofence (28m)" ok={step === "done"} />
-          <Row icon={Shield} label="Identity verified" ok={step === "done"} />
-        </div>
-      </div>
-
-      <div className="p-5">
-        {step === "scan" && (
-          <button onClick={() => setStep("verify")} className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-bold active:scale-[0.98]">
-            Capture face
-          </button>
-        )}
-        {step === "verify" && (
-          <button onClick={() => setStep("done")} className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-bold active:scale-[0.98]">
-            Verify location
-          </button>
-        )}
-        {step === "done" && (
-          <button onClick={done} className="w-full h-14 rounded-2xl bg-success text-success-foreground font-bold active:scale-[0.98] flex items-center justify-center gap-2">
-            <CheckCircle2 className="w-5 h-5" /> Marked present
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function Row({ icon: Icon, label, ok }: { icon: any; label: string; ok: boolean }) {
-  return (
-    <div className={`flex items-center gap-3 p-3 rounded-xl ${ok ? "bg-success/15" : "bg-background/5"}`}>
-      <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${ok ? "bg-success/30" : "bg-background/10"}`}>
-        {ok ? <CheckCircle2 className="w-5 h-5 text-success" /> : <Icon className="w-5 h-5 opacity-60" />}
-      </div>
-      <span className="text-sm font-medium flex-1">{label}</span>
-    </div>
-  );
-}
-
-/* ---------- Workers tab ---------- */
-function WorkersTab({ workers, openWorker }: { workers: Worker[]; openWorker: (id: string) => void }) {
-  const [q, setQ] = useState("");
-  const filtered = workers.filter(w => w.name.toLowerCase().includes(q.toLowerCase()) || w.skill.toLowerCase().includes(q.toLowerCase()));
-
-  return (
-    <div className="px-5 pt-12">
-      <h1 className="text-2xl font-extrabold tracking-tight">My workers</h1>
-      <p className="text-sm text-muted-foreground mt-1">{workers.length} workers · {workers.filter(w=>w.present).length} present today</p>
-
-      <div className="mt-5 flex items-center gap-2 h-12 px-4 rounded-2xl bg-surface border border-border">
-        <Search className="w-4 h-4 text-muted-foreground" />
-        <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Search by name or skill" className="flex-1 bg-transparent outline-none text-sm" />
-      </div>
-
-      <div className="mt-4 space-y-2">
-        {filtered.map((w) => (
-          <button key={w.id} onClick={() => openWorker(w.id)} className="w-full text-left flex items-center gap-3 p-3 rounded-2xl bg-surface border border-border active:scale-[0.99]">
-            <Avatar w={w} />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2"><span className="font-semibold truncate">{w.name}</span>
-                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-warning-foreground bg-warning/40 px-1.5 py-0.5 rounded">
-                  <Star className="w-2.5 h-2.5 fill-current" /> {w.rating}
-                </span>
-              </div>
-              <div className="text-xs text-muted-foreground">{w.skill} · {fmt(w.rate)}/day · {w.days} days</div>
-            </div>
-            <ChevronRight className="w-4 h-4 text-muted-foreground" />
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Pool tab ---------- */
-function PoolTab({ openWorker }: { openWorker: (id: string) => void }) {
-  return (
-    <div className="px-5 pt-12">
-      <div className="flex items-center gap-2">
-        <Sparkles className="w-5 h-5 text-primary" />
-        <span className="text-xs font-bold tracking-widest text-primary uppercase">City pool</span>
-      </div>
-      <h1 className="text-2xl font-extrabold tracking-tight mt-1">Hire verified workers</h1>
-      <p className="text-sm text-muted-foreground mt-1">Workers free from other sites in Bengaluru today</p>
-
-      <div className="mt-5 space-y-3">
-        {POOL.map((w) => (
-          <div key={w.id} className="rounded-2xl p-4 bg-surface border border-border">
-            <div className="flex items-center gap-3">
-              <Avatar w={w} large />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold truncate">{w.name}</h3>
-                  <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-warning-foreground bg-warning/40 px-1.5 py-0.5 rounded">
-                    <Star className="w-2.5 h-2.5 fill-current" /> {w.rating}
-                  </span>
-                </div>
-                <div className="text-xs text-muted-foreground">{w.skill} · {fmt(w.rate)}/day</div>
-                <div className="text-[11px] text-success font-semibold mt-0.5 flex items-center gap-1">
-                  <Shield className="w-3 h-3" /> Aadhaar verified · 142 days worked
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2 mt-3">
-              <button onClick={() => openWorker(w.id)} className="h-10 rounded-xl border border-border text-sm font-semibold active:scale-95">View</button>
-              <button className="h-10 rounded-xl bg-primary text-primary-foreground text-sm font-bold active:scale-95 flex items-center justify-center gap-1">
-                <Phone className="w-3.5 h-3.5" /> Request
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" />
+      <div onClick={(e)=>e.stopPropagation()} className="relative w-full sm:max-w-sm bg-background rounded-t-3xl sm:rounded-3xl border border-border p-6">
+        {step==="choose" ? (
+          <>
+            <h2 className="font-bold text-lg mb-1">Attendance</h2>
+            <p className="text-xs text-muted-foreground mb-5">Choose an action</p>
+            <div className="grid grid-cols-3 gap-2">
+              <button onClick={()=>doIt("in")} className="aspect-square rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col items-center justify-center gap-2 active:scale-95">
+                <LogIn className="size-6 text-emerald-700" />
+                <span className="text-xs font-semibold text-emerald-700">Clock in</span>
+              </button>
+              <button onClick={()=>doIt("break")} className="aspect-square rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col items-center justify-center gap-2 active:scale-95">
+                <Coffee className="size-6 text-amber-700" />
+                <span className="text-xs font-semibold text-amber-700">Break</span>
+              </button>
+              <button onClick={()=>doIt("out")} className="aspect-square rounded-2xl bg-rose-500/10 border border-rose-500/20 flex flex-col items-center justify-center gap-2 active:scale-95">
+                <LogOut className="size-6 text-rose-700" />
+                <span className="text-xs font-semibold text-rose-700">Clock out</span>
               </button>
             </div>
+          </>
+        ) : (
+          <div className="text-center py-4">
+            <div className="h-16 w-16 rounded-full bg-emerald-500/15 grid place-items-center mx-auto mb-4">
+              <CheckCircle2 className="size-8 text-emerald-600" />
+            </div>
+            <h2 className="font-bold text-lg">
+              {action==="in"?"Clocked in":action==="break"?"On break":"Clocked out"}
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1 tabular-nums">at {new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"})}</p>
+            <button onClick={onClose} className="mt-6 w-full h-12 rounded-xl bg-foreground text-background font-semibold">Done</button>
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
 }
 
-/* ---------- Wages tab ---------- */
-function WagesTab({ workers, openPayout }: { workers: Worker[]; openPayout: () => void }) {
-  const totals = useMemo(() => {
-    const gross = workers.reduce((s, w) => s + w.rate * w.days, 0);
-    const advance = workers.reduce((s, w) => s + w.advance, 0);
-    return { gross, advance, net: gross - advance };
-  }, [workers]);
-
+function ShotModal({ shot, onClose }: { shot: Screenshot; onClose: () => void }) {
   return (
-    <div className="px-5 pt-12">
-      <h1 className="text-2xl font-extrabold tracking-tight">Wages</h1>
-      <p className="text-sm text-muted-foreground mt-1">Week of 25 May – 31 May</p>
-
-      <div className="mt-5 rounded-3xl p-5 bg-foreground text-background">
-        <div className="text-xs uppercase tracking-widest opacity-60 font-bold">Net payable</div>
-        <div className="text-4xl font-extrabold tracking-tight mt-1">{fmt(totals.net)}</div>
-        <div className="mt-4 flex items-center gap-4 text-sm">
-          <div><div className="opacity-60 text-xs">Gross</div><div className="font-semibold">{fmt(totals.gross)}</div></div>
-          <div className="w-px h-8 bg-background/20" />
-          <div><div className="opacity-60 text-xs">Advance</div><div className="font-semibold">−{fmt(totals.advance)}</div></div>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center p-0 sm:p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-foreground/60 backdrop-blur-sm" />
+      <div onClick={(e)=>e.stopPropagation()} className="relative w-full sm:max-w-2xl bg-background rounded-t-3xl sm:rounded-2xl border border-border overflow-hidden">
+        <div className="aspect-video bg-gradient-to-br from-secondary via-accent to-secondary grid place-items-center">
+          <Monitor className="size-16 text-muted-foreground" />
         </div>
-        <button onClick={openPayout} className="mt-4 w-full h-12 rounded-2xl bg-primary text-primary-foreground font-bold flex items-center justify-center gap-2 active:scale-[0.98]">
-          <Send className="w-4 h-4" /> Pay via UPI
-        </button>
-      </div>
-
-      <div className="mt-6 flex items-center justify-between">
-        <h2 className="font-bold">Breakdown</h2>
-        <span className="text-xs text-muted-foreground flex items-center gap-1"><TrendingUp className="w-3 h-3 text-success" /> +8% vs last week</span>
-      </div>
-      <div className="mt-3 space-y-2">
-        {workers.map((w) => (
-          <div key={w.id} className="flex items-center gap-3 p-3 rounded-2xl bg-surface border border-border">
-            <Avatar w={w} />
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold text-sm truncate">{w.name}</div>
-              <div className="text-[11px] text-muted-foreground">{w.days} days × {fmt(w.rate)} − adv {fmt(w.advance)}</div>
+        <div className="p-5">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="min-w-0">
+              <h2 className="font-bold truncate">{shot.emp}</h2>
+              <p className="text-xs text-muted-foreground">{shot.time} · {shot.app}</p>
             </div>
-            <div className="font-bold">{fmt(w.rate * w.days - w.advance)}</div>
+            <span className="shrink-0 px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-700 text-xs font-bold tabular-nums">{shot.activity}% active</span>
           </div>
-        ))}
+          <div className="grid grid-cols-2 gap-2">
+            <button className="h-10 rounded-xl bg-secondary font-semibold text-sm flex items-center justify-center gap-2"><Eye className="size-4" /> View full</button>
+            <button onClick={onClose} className="h-10 rounded-xl bg-foreground text-background font-semibold text-sm">Close</button>
+          </div>
+        </div>
       </div>
     </div>
-  );
-}
-
-/* ---------- Payout flow ---------- */
-function Payout({ workers, back, done }: { workers: Worker[]; back: () => void; done: () => void }) {
-  const [paying, setPaying] = useState(false);
-  const [paid, setPaid] = useState(false);
-  const total = workers.reduce((s, w) => s + w.rate * w.days - w.advance, 0);
-  const fee = Math.round(workers.length * 3);
-
-  const start = () => {
-    setPaying(true);
-    setTimeout(() => { setPaying(false); setPaid(true); }, 1600);
-  };
-
-  return (
-    <div className="absolute inset-0 flex flex-col">
-      <header className="px-5 pt-12 pb-4 flex items-center justify-between">
-        <button onClick={back} className="w-10 h-10 rounded-full bg-surface border border-border flex items-center justify-center">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <span className="text-sm font-semibold">UPI Payout</span>
-        <div className="w-10" />
-      </header>
-
-      {!paid ? (
-        <>
-          <div className="flex-1 overflow-y-auto px-5">
-            <div className="rounded-3xl p-5 bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20">
-              <div className="text-xs font-bold uppercase tracking-widest text-primary">Total payout</div>
-              <div className="text-4xl font-extrabold mt-1">{fmt(total)}</div>
-              <div className="text-xs text-muted-foreground mt-1">to {workers.length} workers · fee {fmt(fee)}</div>
-            </div>
-
-            <h2 className="font-bold mt-6 mb-3">Recipients</h2>
-            <div className="space-y-2">
-              {workers.map((w) => (
-                <div key={w.id} className="flex items-center gap-3 p-3 rounded-2xl bg-surface border border-border">
-                  <Avatar w={w} />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-sm truncate">{w.name}</div>
-                    <div className="text-[11px] text-muted-foreground">UPI · {w.phone.slice(-5)}@upi</div>
-                  </div>
-                  <div className="font-bold">{fmt(w.rate * w.days - w.advance)}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="p-5 border-t border-border">
-            <button onClick={start} disabled={paying} className="w-full h-14 rounded-2xl bg-foreground text-background font-bold active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70">
-              {paying ? (
-                <><div className="w-5 h-5 rounded-full border-2 border-background/30 border-t-background animate-spin" /> Sending…</>
-              ) : (
-                <><Send className="w-4 h-4" /> Pay {fmt(total)} via UPI</>
-              )}
-            </button>
-          </div>
-        </>
-      ) : (
-        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
-          <div className="w-24 h-24 rounded-full bg-success/20 flex items-center justify-center mb-6 animate-in zoom-in duration-300">
-            <CheckCircle2 className="w-12 h-12 text-success" />
-          </div>
-          <h2 className="text-2xl font-extrabold">Payouts sent!</h2>
-          <p className="text-muted-foreground mt-2">{fmt(total)} transferred to {workers.length} workers via UPI</p>
-          <div className="mt-6 w-full max-w-xs rounded-2xl bg-surface border border-border p-4 text-left text-sm">
-            <Line k="Reference" v="STSR4829HX" />
-            <Line k="Time" v="Just now" />
-            <Line k="Fee" v={fmt(fee)} />
-          </div>
-          <button onClick={done} className="mt-auto w-full h-14 rounded-2xl bg-primary text-primary-foreground font-bold active:scale-[0.98]">Done</button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Line({ k, v }: { k: string; v: string }) {
-  return <div className="flex justify-between py-1.5 border-b last:border-0 border-border"><span className="text-muted-foreground">{k}</span><span className="font-semibold">{v}</span></div>;
-}
-
-/* ---------- Worker profile ---------- */
-function WorkerProfile({ worker, back }: { worker: Worker; back: () => void }) {
-  return (
-    <div className="absolute inset-0 flex flex-col">
-      <header className="px-5 pt-12 pb-6 bg-gradient-to-b from-primary/25 to-background">
-        <button onClick={back} className="w-10 h-10 rounded-full bg-surface border border-border flex items-center justify-center mb-4">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div className="flex items-center gap-4">
-          <Avatar w={worker} large />
-          <div>
-            <h1 className="text-xl font-extrabold tracking-tight">{worker.name}</h1>
-            <p className="text-sm text-muted-foreground">{worker.skill} · {fmt(worker.rate)}/day</p>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="inline-flex items-center gap-0.5 text-[10px] font-bold bg-warning/40 text-warning-foreground px-1.5 py-0.5 rounded">
-                <Star className="w-2.5 h-2.5 fill-current" /> {worker.rating}
-              </span>
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-success/15 text-success px-1.5 py-0.5 rounded">
-                <Shield className="w-2.5 h-2.5" /> Verified
-              </span>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <div className="flex-1 overflow-y-auto px-5">
-        <div className="grid grid-cols-3 gap-2">
-          <Pill label="Days" value={`${worker.days}`} tone="default" />
-          <Pill label="Earned" value={fmt(worker.rate * worker.days)} tone="default" />
-          <Pill label="Advance" value={fmt(worker.advance)} tone="warning" />
-        </div>
-
-        <h2 className="font-bold mt-6 mb-3">Recent attendance</h2>
-        <div className="space-y-2">
-          {["Today", "Yesterday", "29 May", "28 May", "27 May"].map((d, i) => (
-            <div key={d} className="flex items-center justify-between p-3 rounded-xl bg-surface border border-border">
-              <div className="text-sm font-medium">{d}</div>
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-muted-foreground">9:{40 + i}a – 6:1{i}p</span>
-                <span className="px-2 py-0.5 rounded bg-success/15 text-success font-bold">{fmt(worker.rate)}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="p-5 border-t border-border grid grid-cols-2 gap-3">
-        <button className="h-12 rounded-2xl border border-border font-semibold flex items-center justify-center gap-2"><Phone className="w-4 h-4" /> Call</button>
-        <button className="h-12 rounded-2xl bg-primary text-primary-foreground font-bold flex items-center justify-center gap-2"><IndianRupee className="w-4 h-4" /> Pay advance</button>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Atoms ---------- */
-function Avatar({ w, large }: { w: Worker; large?: boolean }) {
-  const size = large ? "w-14 h-14 text-base" : "w-11 h-11 text-sm";
-  return (
-    <div className={`${size} rounded-2xl bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center font-extrabold text-foreground relative shrink-0`}>
-      {w.avatar}
-      {w.present && <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-success border-2 border-background" />}
-    </div>
-  );
-}
-
-function BottomNav({ tab, setTab }: { tab: string; setTab: (t: any) => void }) {
-  const items = [
-    { id: "home", label: "Home", icon: BarChart3 },
-    { id: "workers", label: "Workers", icon: Users },
-    { id: "pool", label: "Pool", icon: Sparkles },
-    { id: "wages", label: "Wages", icon: Wallet },
-  ];
-  return (
-    <nav className="absolute bottom-0 inset-x-0 bg-surface/95 backdrop-blur border-t border-border px-2 pt-2 pb-4 flex items-center justify-around">
-      {items.map((it) => {
-        const active = tab === it.id;
-        const Icon = it.icon;
-        return (
-          <button key={it.id} onClick={() => setTab(it.id)} className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl">
-            <Icon className={`w-5 h-5 ${active ? "text-primary" : "text-muted-foreground"}`} />
-            <span className={`text-[10px] font-bold ${active ? "text-primary" : "text-muted-foreground"}`}>{it.label}</span>
-            {active && <span className="w-1 h-1 rounded-full bg-primary" />}
-          </button>
-        );
-      })}
-    </nav>
   );
 }
