@@ -1,834 +1,823 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState, useMemo, useEffect } from "react";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import {
-  LayoutDashboard, Users, Clock, FolderKanban, BarChart3, Bell, Search,
-  Play, Pause, Square, Coffee, LogIn, LogOut, Camera, Activity, TrendingUp,
-  CheckCircle2, AlertCircle, Circle, ChevronRight, Plus, Filter, Calendar,
-  Shield, Settings, Eye, Image as ImageIcon, Zap, Target, ArrowUpRight,
-  ArrowDownRight, MoreVertical, X, Monitor, MousePointer, Keyboard, Timer,
+  LayoutDashboard,
+  Users,
+  Camera,
+  FolderKanban,
+  BarChart3,
+  LogOut,
+  Loader2,
+  Play,
+  Pause,
+  Square,
+  Coffee,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Activity,
+  TrendingUp,
+  Shield,
+  Copy,
+  Briefcase,
+  ChevronRight,
 } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from "recharts";
+
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useAuth, type AppRole } from "@/lib/auth-context";
+import { supabase } from "@/integrations/supabase/client";
+import { reviewScreenshot } from "@/lib/screenshots.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "TillTask — Remote Workforce Productivity" },
-      { name: "description", content: "Monitor remote teams, track hours, and measure productivity without enterprise bloat." },
+      {
+        name: "description",
+        content: "Monitor remote employees, track time, and measure productivity.",
+      },
     ],
   }),
-  component: App,
+  component: HomeGate,
 });
 
-/* ---------------- Types & Mock Data ---------------- */
-type Status = "online" | "idle" | "offline";
-type Employee = {
-  id: string; name: string; role: string; team: string; status: Status;
-  lastActive: string; todayHours: number; activity: number; productivity: number;
-  project: string; avatar: string;
-};
-type Project = { id: string; name: string; client: string; members: number; hours: number; progress: number; color: string };
-type Screenshot = { id: string; emp: string; time: string; activity: number; app: string };
+function HomeGate() {
+  const { loading, user, primaryRole, companyId } = useAuth();
+  const navigate = useNavigate();
 
-const EMPLOYEES: Employee[] = [
-  { id: "e1", name: "Aarav Mehta", role: "Frontend Dev", team: "Product", status: "online", lastActive: "now", todayHours: 6.4, activity: 87, productivity: 92, project: "TillTask Web", avatar: "AM" },
-  { id: "e2", name: "Priya Sharma", role: "Designer", team: "Design", status: "online", lastActive: "now", todayHours: 5.1, activity: 78, productivity: 84, project: "Brand Refresh", avatar: "PS" },
-  { id: "e3", name: "Rahul Verma", role: "Backend Dev", team: "Product", status: "idle", lastActive: "12m ago", todayHours: 4.8, activity: 52, productivity: 71, project: "API v2", avatar: "RV" },
-  { id: "e4", name: "Sneha Iyer", role: "QA Engineer", team: "Product", status: "online", lastActive: "now", todayHours: 7.2, activity: 91, productivity: 95, project: "TillTask Web", avatar: "SI" },
-  { id: "e5", name: "Vikram Singh", role: "Marketing", team: "Growth", status: "offline", lastActive: "2h ago", todayHours: 3.0, activity: 0, productivity: 68, project: "Q1 Campaign", avatar: "VS" },
-  { id: "e6", name: "Anita Rao", role: "Content Writer", team: "Growth", status: "idle", lastActive: "8m ago", todayHours: 5.6, activity: 44, productivity: 76, project: "Blog Sprint", avatar: "AR" },
-  { id: "e7", name: "Karan Patel", role: "DevOps", team: "Product", status: "online", lastActive: "now", todayHours: 6.0, activity: 82, productivity: 88, project: "API v2", avatar: "KP" },
-];
-
-const PROJECTS: Project[] = [
-  { id: "p1", name: "TillTask Web", client: "Internal", members: 5, hours: 142, progress: 68, color: "bg-amber-500" },
-  { id: "p2", name: "API v2", client: "Internal", members: 3, hours: 96, progress: 45, color: "bg-emerald-500" },
-  { id: "p3", name: "Brand Refresh", client: "Acme Co.", members: 2, hours: 38, progress: 80, color: "bg-rose-500" },
-  { id: "p4", name: "Q1 Campaign", client: "Growth", members: 4, hours: 54, progress: 30, color: "bg-indigo-500" },
-];
-
-const SCREENSHOTS: Screenshot[] = [
-  { id: "ss1", emp: "Aarav Mehta", time: "10:42 AM", activity: 92, app: "VS Code" },
-  { id: "ss2", emp: "Priya Sharma", time: "10:38 AM", activity: 81, app: "Figma" },
-  { id: "ss3", emp: "Sneha Iyer", time: "10:30 AM", activity: 95, app: "Chrome" },
-  { id: "ss4", emp: "Rahul Verma", time: "10:24 AM", activity: 42, app: "Slack" },
-  { id: "ss5", emp: "Karan Patel", time: "10:18 AM", activity: 88, app: "Terminal" },
-  { id: "ss6", emp: "Anita Rao", time: "10:12 AM", activity: 55, app: "Notion" },
-];
-
-const NOTIFICATIONS = [
-  { id: "n1", type: "idle", title: "Rahul Verma is idle", desc: "No activity for 12 minutes", time: "now" },
-  { id: "n2", type: "missing", title: "Missing screenshot", desc: "Vikram Singh — 11:00 AM slot", time: "5m" },
-  { id: "n3", type: "clockin", title: "Late clock-in", desc: "Anita Rao clocked in at 10:42 AM", time: "1h" },
-];
-
-/* ---------------- App Shell ---------------- */
-function App() {
-  const [authed, setAuthed] = useState(false);
-  const [tab, setTab] = useState<"home" | "team" | "track" | "projects" | "reports">("home");
-  const [profileId, setProfileId] = useState<string | null>(null);
-  const [showNotif, setShowNotif] = useState(false);
-  const [showClock, setShowClock] = useState(false);
-  const [shotPreview, setShotPreview] = useState<Screenshot | null>(null);
-
-  if (!authed) return <Login onDone={() => setAuthed(true)} />;
-
-  const employee = profileId ? EMPLOYEES.find((e) => e.id === profileId) ?? null : null;
-
-  return (
-    <div className="min-h-dvh bg-background text-foreground flex flex-col">
-      <TopBar onBell={() => setShowNotif(true)} />
-      <main className="flex-1 pb-24">
-        {employee ? (
-          <EmployeeProfile emp={employee} onBack={() => setProfileId(null)} />
-        ) : tab === "home" ? (
-          <Dashboard onOpenEmp={setProfileId} onClock={() => setShowClock(true)} onShot={setShotPreview} />
-        ) : tab === "team" ? (
-          <TeamScreen onOpen={setProfileId} />
-        ) : tab === "track" ? (
-          <TrackingScreen onClock={() => setShowClock(true)} />
-        ) : tab === "projects" ? (
-          <ProjectsScreen />
-        ) : (
-          <ReportsScreen />
-        )}
-      </main>
-      {!employee && <BottomNav tab={tab} setTab={setTab} />}
-      {showNotif && <NotifSheet onClose={() => setShowNotif(false)} />}
-      {showClock && <ClockModal onClose={() => setShowClock(false)} />}
-      {shotPreview && <ShotModal shot={shotPreview} onClose={() => setShotPreview(null)} />}
-    </div>
-  );
-}
-
-/* ---------------- Login ---------------- */
-function Login({ onDone }: { onDone: () => void }) {
-  const [step, setStep] = useState<"email" | "otp">("email");
-  const [email, setEmail] = useState("admin@tilltask.io");
-  const [otp, setOtp] = useState("");
-
-  return (
-    <div className="min-h-dvh bg-background flex flex-col">
-      <div className="flex-1 px-6 pt-16 pb-8 max-w-md mx-auto w-full flex flex-col">
-        <div className="flex items-center gap-2 mb-12">
-          <div className="h-10 w-10 rounded-xl bg-primary grid place-items-center">
-            <Timer className="size-5 text-primary-foreground" />
-          </div>
-          <div>
-            <div className="font-bold text-lg leading-none">TillTask</div>
-            <div className="text-xs text-muted-foreground mt-0.5">Remote workforce, measured.</div>
-          </div>
-        </div>
-
-        <h1 className="text-3xl font-bold tracking-tight mb-2">
-          {step === "email" ? "Sign in to your workspace" : "Verify it's you"}
-        </h1>
-        <p className="text-muted-foreground mb-8">
-          {step === "email" ? "We'll send a one-time code to your work email." : `Enter the 6-digit code sent to ${email}`}
-        </p>
-
-        {step === "email" ? (
-          <>
-            <label className="text-sm font-medium mb-2">Work email</label>
-            <input
-              type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-              className="h-12 px-4 rounded-xl border border-border bg-surface text-base outline-none focus:ring-2 focus:ring-ring"
-              placeholder="you@company.com"
-            />
-            <button
-              onClick={() => setStep("otp")}
-              className="mt-4 h-12 rounded-xl bg-primary text-primary-foreground font-semibold active:scale-[0.98] transition"
-            >
-              Continue
-            </button>
-          </>
-        ) : (
-          <>
-            <input
-              value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              inputMode="numeric"
-              className="h-14 px-4 rounded-xl border border-border bg-surface text-2xl tracking-[0.5em] text-center font-mono outline-none focus:ring-2 focus:ring-ring"
-              placeholder="••••••"
-            />
-            <button
-              onClick={onDone} disabled={otp.length !== 6}
-              className="mt-4 h-12 rounded-xl bg-primary text-primary-foreground font-semibold disabled:opacity-40 active:scale-[0.98] transition"
-            >
-              Sign in
-            </button>
-            <button onClick={() => setStep("email")} className="mt-3 text-sm text-muted-foreground">
-              Use a different email
-            </button>
-          </>
-        )}
-
-        <div className="mt-auto pt-8 text-xs text-muted-foreground text-center">
-          By signing in you agree to TillTask's Terms & Privacy.
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ---------------- Top Bar ---------------- */
-function TopBar({ onBell }: { onBell: () => void }) {
-  return (
-    <header className="sticky top-0 z-30 bg-background/85 backdrop-blur border-b border-border">
-      <div className="max-w-screen-xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-3">
-        <div className="h-8 w-8 rounded-lg bg-primary grid place-items-center shrink-0">
-          <Timer className="size-4 text-primary-foreground" />
-        </div>
-        <div className="min-w-0">
-          <div className="font-bold text-sm leading-none truncate">TillTask</div>
-          <div className="text-[11px] text-muted-foreground mt-0.5 truncate">Acme Inc · Admin</div>
-        </div>
-        <div className="ml-auto flex items-center gap-1">
-          <button className="h-9 w-9 grid place-items-center rounded-lg hover:bg-secondary" aria-label="Search">
-            <Search className="size-4" />
-          </button>
-          <button onClick={onBell} className="h-9 w-9 grid place-items-center rounded-lg hover:bg-secondary relative" aria-label="Notifications">
-            <Bell className="size-4" />
-            <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-destructive" />
-          </button>
-          <div className="h-8 w-8 rounded-full bg-accent grid place-items-center text-xs font-bold ml-1">AD</div>
-        </div>
-      </div>
-    </header>
-  );
-}
-
-/* ---------------- Bottom Nav ---------------- */
-function BottomNav({ tab, setTab }: { tab: string; setTab: (t: any) => void }) {
-  const items = [
-    { id: "home", label: "Home", icon: LayoutDashboard },
-    { id: "team", label: "Team", icon: Users },
-    { id: "track", label: "Track", icon: Clock },
-    { id: "projects", label: "Projects", icon: FolderKanban },
-    { id: "reports", label: "Reports", icon: BarChart3 },
-  ];
-  return (
-    <nav className="fixed bottom-0 inset-x-0 z-30 bg-background/95 backdrop-blur border-t border-border">
-      <div className="max-w-screen-xl mx-auto grid grid-cols-5 px-2 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))]">
-        {items.map((it) => {
-          const active = tab === it.id;
-          return (
-            <button
-              key={it.id} onClick={() => setTab(it.id)}
-              className={`flex flex-col items-center gap-1 py-1.5 rounded-lg text-[11px] font-medium transition ${
-                active ? "text-primary" : "text-muted-foreground"
-              }`}
-            >
-              <it.icon className={`size-5 ${active ? "stroke-[2.5]" : ""}`} />
-              {it.label}
-            </button>
-          );
-        })}
-      </div>
-    </nav>
-  );
-}
-
-/* ---------------- Dashboard ---------------- */
-function Dashboard({
-  onOpenEmp, onClock, onShot,
-}: { onOpenEmp: (id: string) => void; onClock: () => void; onShot: (s: Screenshot) => void }) {
-  const stats = useMemo(() => {
-    const online = EMPLOYEES.filter((e) => e.status === "online").length;
-    const idle = EMPLOYEES.filter((e) => e.status === "idle").length;
-    const offline = EMPLOYEES.filter((e) => e.status === "offline").length;
-    const hours = EMPLOYEES.reduce((a, e) => a + e.todayHours, 0);
-    const avgProd = Math.round(EMPLOYEES.reduce((a, e) => a + e.productivity, 0) / EMPLOYEES.length);
-    return { online, idle, offline, hours, avgProd };
-  }, []);
-
-  return (
-    <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-5 space-y-5">
-      <section>
-        <div className="flex items-end justify-between gap-3 mb-1">
-          <div className="min-w-0">
-            <p className="text-xs text-muted-foreground">Today · Mon, Jun 15</p>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight truncate">Good morning, Admin</h1>
-          </div>
-          <button onClick={onClock} className="shrink-0 h-10 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center gap-2 active:scale-95 transition">
-            <Play className="size-4" /> <span className="hidden xs:inline">Clock</span>
-          </button>
-        </div>
-      </section>
-
-      {/* Live stats — responsive grid */}
-      <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard icon={<Circle className="size-4 text-emerald-600 fill-emerald-600" />} label="Online" value={stats.online} sub={`${EMPLOYEES.length} total`} accent="emerald" />
-        <StatCard icon={<Activity className="size-4 text-amber-600" />} label="Idle" value={stats.idle} sub="5m+ no activity" accent="amber" />
-        <StatCard icon={<Clock className="size-4 text-foreground" />} label="Hours today" value={stats.hours.toFixed(1)} sub="vs 42h yest." accent="neutral" />
-        <StatCard icon={<TrendingUp className="size-4 text-indigo-600" />} label="Productivity" value={`${stats.avgProd}%`} sub="+4% this week" accent="indigo" />
-      </section>
-
-      {/* Productivity chart */}
-      <section className="rounded-2xl border border-border bg-card p-4 sm:p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="font-semibold">Team productivity</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">Last 7 days</p>
-          </div>
-          <button className="text-xs text-muted-foreground flex items-center gap-1 hover:text-foreground">
-            This week <ChevronRight className="size-3" />
-          </button>
-        </div>
-        <MiniChart data={[68, 74, 71, 82, 79, 88, 84]} labels={["M", "T", "W", "T", "F", "S", "S"]} />
-      </section>
-
-      {/* Active employees */}
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold">Active employees</h2>
-          <button className="text-xs text-primary font-medium">See all</button>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {EMPLOYEES.slice(0, 5).map((e) => (
-            <EmployeeRow key={e.id} emp={e} onClick={() => onOpenEmp(e.id)} />
-          ))}
-        </div>
-      </section>
-
-      {/* Recent screenshots */}
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h2 className="font-semibold">Recent screenshots</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">Auto-captured · 10 min interval</p>
-          </div>
-          <button className="text-xs text-primary font-medium">Timeline</button>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-          {SCREENSHOTS.map((s) => <ShotThumb key={s.id} shot={s} onClick={() => onShot(s)} />)}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-/* ---------------- Team / Employee Directory ---------------- */
-function TeamScreen({ onOpen }: { onOpen: (id: string) => void }) {
-  const [filter, setFilter] = useState<"all" | Status>("all");
-  const list = EMPLOYEES.filter((e) => filter === "all" || e.status === filter);
-
-  return (
-    <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-5 space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Team</h1>
-        <p className="text-sm text-muted-foreground mt-1">{EMPLOYEES.length} employees · {EMPLOYEES.filter(e=>e.status==="online").length} online</p>
-      </div>
-
-      <div className="flex gap-2 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 pb-1 scrollbar-none">
-        {(["all", "online", "idle", "offline"] as const).map((k) => (
-          <button
-            key={k} onClick={() => setFilter(k)}
-            className={`shrink-0 h-9 px-4 rounded-full text-xs font-semibold capitalize border transition ${
-              filter === k ? "bg-foreground text-background border-foreground" : "bg-surface border-border text-muted-foreground"
-            }`}
-          >
-            {k} {k !== "all" && `· ${EMPLOYEES.filter(e=>e.status===k).length}`}
-          </button>
-        ))}
-        <button className="shrink-0 h-9 w-9 grid place-items-center rounded-full bg-surface border border-border ml-auto">
-          <Filter className="size-4 text-muted-foreground" />
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-        {list.map((e) => <EmployeeRow key={e.id} emp={e} onClick={() => onOpen(e.id)} />)}
-      </div>
-    </div>
-  );
-}
-
-/* ---------------- Tracking ---------------- */
-function TrackingScreen({ onClock }: { onClock: () => void }) {
-  const [running, setRunning] = useState(true);
-  const [seconds, setSeconds] = useState(2 * 3600 + 14 * 60 + 22);
   useEffect(() => {
-    if (!running) return;
-    const id = setInterval(() => setSeconds((s) => s + 1), 1000);
-    return () => clearInterval(id);
-  }, [running]);
+    if (loading) return;
+    if (!user) {
+      navigate({ to: "/auth" });
+      return;
+    }
+    if (!primaryRole) {
+      // signed in but no role yet → admin must set up a company
+      navigate({ to: "/onboarding" });
+      return;
+    }
+    if (primaryRole === "company_admin" && !companyId) {
+      navigate({ to: "/onboarding" });
+    }
+  }, [loading, user, primaryRole, companyId, navigate]);
 
-  const hh = Math.floor(seconds / 3600).toString().padStart(2, "0");
-  const mm = Math.floor((seconds % 3600) / 60).toString().padStart(2, "0");
-  const ss = (seconds % 60).toString().padStart(2, "0");
+  if (loading || !user || !primaryRole) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+  return <AppShell role={primaryRole} />;
+}
+
+type Tab = "home" | "team" | "screens" | "projects" | "reports";
+
+function AppShell({ role }: { role: AppRole }) {
+  const [tab, setTab] = useState<Tab>("home");
+  const { profile, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  // employees only get home + screens (their own) + their projects
+  const tabs: { id: Tab; label: string; icon: React.ElementType; allow: AppRole[] }[] = [
+    { id: "home", label: "Home", icon: LayoutDashboard, allow: ["super_admin", "company_admin", "employee"] },
+    { id: "team", label: "Team", icon: Users, allow: ["super_admin", "company_admin"] },
+    { id: "screens", label: "Screens", icon: Camera, allow: ["super_admin", "company_admin", "employee"] },
+    { id: "projects", label: "Projects", icon: FolderKanban, allow: ["super_admin", "company_admin", "employee"] },
+    { id: "reports", label: "Reports", icon: BarChart3, allow: ["super_admin", "company_admin"] },
+  ].filter((t) => t.allow.includes(role));
 
   return (
-    <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-5 space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Time tracking</h1>
-        <p className="text-sm text-muted-foreground mt-1">Project · TillTask Web</p>
-      </div>
-
-      <div className="rounded-3xl bg-gradient-to-br from-primary/20 via-primary/10 to-transparent border border-primary/20 p-6 sm:p-8 text-center">
-        <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">Current session</p>
-        <div className="font-mono text-5xl sm:text-6xl font-bold tabular-nums tracking-tight">
-          {hh}:{mm}:<span className="text-primary">{ss}</span>
-        </div>
-        <p className="text-sm text-muted-foreground mt-3">Activity 87% · 12 screenshots captured</p>
-        <div className="flex justify-center gap-2 mt-6">
-          <button onClick={() => setRunning((r) => !r)} className="h-12 px-6 rounded-2xl bg-foreground text-background font-semibold flex items-center gap-2 active:scale-95 transition">
-            {running ? <><Pause className="size-4" /> Pause</> : <><Play className="size-4" /> Resume</>}
-          </button>
-          <button className="h-12 px-5 rounded-2xl bg-surface border border-border font-semibold flex items-center gap-2"><Coffee className="size-4" /> Break</button>
-          <button onClick={onClock} className="h-12 w-12 grid place-items-center rounded-2xl bg-destructive/10 text-destructive border border-destructive/20"><Square className="size-4 fill-destructive" /></button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-3">
-        <MiniStat icon={<Activity className="size-4" />} label="Active" value="87%" />
-        <MiniStat icon={<MousePointer className="size-4" />} label="Clicks" value="2.1k" />
-        <MiniStat icon={<Keyboard className="size-4" />} label="Keys" value="14k" />
-      </div>
-
-      <section>
-        <h2 className="font-semibold mb-3">Today's sessions</h2>
-        <div className="rounded-2xl border border-border bg-card divide-y divide-border overflow-hidden">
-          {[
-            { t: "TillTask Web", s: "09:02", e: "11:16", h: "2h 14m" },
-            { t: "Standup", s: "11:30", e: "12:00", h: "30m" },
-            { t: "TillTask Web", s: "13:05", e: "—", h: "ongoing" },
-          ].map((r, i) => (
-            <div key={i} className="px-4 py-3 flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-primary/10 grid place-items-center shrink-0">
-                <Timer className="size-4 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-sm truncate">{r.t}</div>
-                <div className="text-xs text-muted-foreground">{r.s} → {r.e}</div>
-              </div>
-              <div className="text-sm font-semibold tabular-nums">{r.h}</div>
+    <div className="min-h-screen bg-background pb-24">
+      <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b">
+        <div className="max-w-screen-xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
+              <Briefcase className="w-4 h-4 text-primary-foreground" />
             </div>
-          ))}
+            <div>
+              <div className="font-bold leading-none">TillTask</div>
+              <div className="text-xs text-muted-foreground capitalize">
+                {role.replace("_", " ")}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="text-right hidden sm:block">
+              <div className="text-sm font-medium">{profile?.full_name ?? profile?.email}</div>
+              <div className="text-xs text-muted-foreground">{profile?.job_title ?? ""}</div>
+            </div>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={async () => {
+                await signOut();
+                navigate({ to: "/auth" });
+              }}
+            >
+              <LogOut className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
-      </section>
+      </header>
 
-      <section>
-        <h2 className="font-semibold mb-3">Attendance · this week</h2>
-        <div className="grid grid-cols-7 gap-1.5">
-          {["M","T","W","T","F","S","S"].map((d,i)=>{
-            const states = ["full","full","full","full","half","off","off"];
-            const st = states[i];
+      <main className="max-w-screen-xl mx-auto px-4 py-6">
+        {tab === "home" && <HomeTab role={role} />}
+        {tab === "team" && <TeamTab />}
+        {tab === "screens" && <ScreensTab role={role} />}
+        {tab === "projects" && <ProjectsTab role={role} />}
+        {tab === "reports" && <ReportsTab />}
+      </main>
+
+      <nav className="fixed bottom-0 inset-x-0 bg-card border-t z-10">
+        <div className="max-w-screen-xl mx-auto grid" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0,1fr))` }}>
+          {tabs.map((t) => {
+            const Icon = t.icon;
+            const active = tab === t.id;
             return (
-              <div key={i} className={`aspect-square rounded-xl grid place-items-center text-xs font-bold ${
-                st==="full" ? "bg-emerald-500/15 text-emerald-700" :
-                st==="half" ? "bg-amber-500/20 text-amber-700" : "bg-muted text-muted-foreground"
-              }`}>{d}</div>
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`flex flex-col items-center gap-1 py-3 text-xs ${
+                  active ? "text-primary" : "text-muted-foreground"
+                }`}
+              >
+                <Icon className="w-5 h-5" />
+                {t.label}
+              </button>
             );
           })}
         </div>
-      </section>
+      </nav>
     </div>
   );
 }
 
-/* ---------------- Projects ---------------- */
-function ProjectsScreen() {
-  return (
-    <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-5 space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
-          <p className="text-sm text-muted-foreground mt-1">{PROJECTS.length} active · 330 tracked hours</p>
-        </div>
-        <button className="h-10 w-10 grid place-items-center rounded-xl bg-foreground text-background"><Plus className="size-4" /></button>
-      </div>
+// =================== HOME TAB ===================
+function HomeTab({ role }: { role: AppRole }) {
+  if (role === "employee") return <EmployeeHome />;
+  return <AdminHome />;
+}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {PROJECTS.map((p) => (
-          <div key={p.id} className="rounded-2xl border border-border bg-card p-4 hover:shadow-md transition">
-            <div className="flex items-start gap-3 mb-3">
-              <div className={`h-10 w-10 rounded-xl ${p.color} grid place-items-center shrink-0`}>
-                <FolderKanban className="size-5 text-white" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="font-semibold truncate">{p.name}</h3>
-                <p className="text-xs text-muted-foreground truncate">{p.client}</p>
-              </div>
-              <button className="h-7 w-7 grid place-items-center rounded-lg hover:bg-secondary">
-                <MoreVertical className="size-4 text-muted-foreground" />
-              </button>
+function AdminHome() {
+  const { companyId } = useAuth();
+
+  const { data: company } = useQuery({
+    enabled: !!companyId,
+    queryKey: ["company", companyId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("companies")
+        .select("*")
+        .eq("id", companyId!)
+        .maybeSingle();
+      return data;
+    },
+  });
+
+  const { data: stats } = useQuery({
+    enabled: !!companyId,
+    queryKey: ["admin-stats", companyId],
+    queryFn: async () => {
+      const today = new Date().toISOString().slice(0, 10);
+      const [emps, att, pending] = await Promise.all([
+        supabase.from("profiles").select("id", { count: "exact", head: true }).eq("company_id", companyId!),
+        supabase
+          .from("attendance")
+          .select("status,active_seconds,idle_seconds,productivity_score", { count: "exact" })
+          .eq("company_id", companyId!)
+          .eq("work_date", today),
+        supabase
+          .from("screenshots")
+          .select("id", { count: "exact", head: true })
+          .eq("company_id", companyId!)
+          .eq("status", "pending"),
+      ]);
+      const present = (att.data ?? []).filter((a) => a.status === "present").length;
+      const onBreak = (att.data ?? []).filter((a) => a.status === "on_break").length;
+      const totalActive = (att.data ?? []).reduce((s, a) => s + (a.active_seconds ?? 0), 0);
+      const avgScore =
+        (att.data ?? []).reduce((s, a) => s + Number(a.productivity_score ?? 0), 0) /
+        Math.max(att.data?.length ?? 1, 1);
+      return {
+        totalEmployees: emps.count ?? 0,
+        present,
+        onBreak,
+        idle: Math.max((att.count ?? 0) - present - onBreak, 0),
+        hoursToday: (totalActive / 3600).toFixed(1),
+        avgScore: avgScore.toFixed(0),
+        pendingScreens: pending.count ?? 0,
+      };
+    },
+  });
+
+  return (
+    <div className="space-y-5">
+      {company && (
+        <Card className="p-4 bg-gradient-to-br from-primary/10 to-accent/30 border-primary/20">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs uppercase text-muted-foreground font-semibold">Company</div>
+              <div className="text-xl font-bold">{company.name}</div>
             </div>
-            <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3">
-              <span className="flex items-center gap-1"><Users className="size-3.5" /> {p.members}</span>
-              <span className="flex items-center gap-1"><Clock className="size-3.5" /> {p.hours}h</span>
-              <span className="ml-auto font-semibold text-foreground">{p.progress}%</span>
-            </div>
-            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-              <div className={`h-full ${p.color}`} style={{ width: `${p.progress}%` }} />
+            <div className="text-right">
+              <div className="text-xs uppercase text-muted-foreground font-semibold">Invite code</div>
+              <div className="flex items-center gap-1">
+                <code className="font-mono font-bold text-primary">{company.invite_code}</code>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7"
+                  onClick={() => {
+                    navigator.clipboard.writeText(company.invite_code);
+                    toast.success("Copied");
+                  }}
+                >
+                  <Copy className="w-3 h-3" />
+                </Button>
+              </div>
             </div>
           </div>
-        ))}
-      </div>
-
-      <section className="rounded-2xl border border-border bg-card p-4 sm:p-5">
-        <h2 className="font-semibold mb-3">Time by project · this week</h2>
-        <div className="space-y-3">
-          {PROJECTS.map((p) => (
-            <div key={p.id}>
-              <div className="flex justify-between text-xs mb-1.5">
-                <span className="font-medium truncate">{p.name}</span>
-                <span className="text-muted-foreground tabular-nums shrink-0 ml-2">{p.hours}h</span>
-              </div>
-              <div className="h-2 rounded-full bg-muted overflow-hidden">
-                <div className={`h-full ${p.color}`} style={{ width: `${(p.hours/142)*100}%` }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-/* ---------------- Reports ---------------- */
-function ReportsScreen() {
-  const [range, setRange] = useState<"day"|"week"|"month">("week");
-  return (
-    <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-5 space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
-        <p className="text-sm text-muted-foreground mt-1">Productivity & attendance insights</p>
-      </div>
-
-      <div className="inline-flex rounded-xl bg-secondary p-1 text-xs font-semibold">
-        {(["day","week","month"] as const).map((r) => (
-          <button key={r} onClick={()=>setRange(r)}
-            className={`px-4 h-8 rounded-lg capitalize ${range===r?"bg-background shadow-sm":"text-muted-foreground"}`}>
-            {r}
-          </button>
-        ))}
-      </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard icon={<Clock className="size-4" />} label="Total hours" value="312h" sub="+8% vs last" accent="neutral" />
-        <StatCard icon={<TrendingUp className="size-4 text-emerald-600" />} label="Avg productivity" value="84%" sub="+4%" accent="emerald" />
-        <StatCard icon={<CheckCircle2 className="size-4 text-indigo-600" />} label="Attendance" value="96%" sub="2 absences" accent="indigo" />
-        <StatCard icon={<Activity className="size-4 text-amber-600" />} label="Avg activity" value="78%" sub="healthy" accent="amber" />
+        <StatCard label="Employees" value={stats?.totalEmployees ?? 0} icon={Users} />
+        <StatCard label="Online now" value={stats?.present ?? 0} icon={Activity} accent="success" />
+        <StatCard label="On break" value={stats?.onBreak ?? 0} icon={Coffee} accent="warning" />
+        <StatCard label="Hours today" value={stats?.hoursToday ?? "0.0"} icon={Clock} />
       </div>
 
-      <section className="rounded-2xl border border-border bg-card p-4 sm:p-5">
-        <h2 className="font-semibold mb-4">Hours by day</h2>
-        <MiniChart data={[42, 48, 51, 46, 52, 18, 8]} labels={["M","T","W","T","F","S","S"]} colorClass="bg-foreground" />
-      </section>
-
-      <section>
-        <h2 className="font-semibold mb-3">Top performers</h2>
-        <div className="rounded-2xl border border-border bg-card overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-muted-foreground border-b border-border">
-                <th className="px-4 py-2.5 font-medium">Employee</th>
-                <th className="px-2 py-2.5 font-medium text-right">Hours</th>
-                <th className="px-4 py-2.5 font-medium text-right">Prod</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...EMPLOYEES].sort((a,b)=>b.productivity-a.productivity).slice(0,5).map((e,i) => (
-                <tr key={e.id} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="text-xs font-bold text-muted-foreground w-4 shrink-0">{i+1}</span>
-                      <div className="h-8 w-8 rounded-full bg-accent grid place-items-center text-[11px] font-bold shrink-0">{e.avatar}</div>
-                      <div className="min-w-0">
-                        <div className="font-medium text-sm truncate">{e.name}</div>
-                        <div className="text-[11px] text-muted-foreground truncate">{e.role}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-2 py-3 text-right tabular-nums text-sm">{e.todayHours}h</td>
-                  <td className="px-4 py-3 text-right">
-                    <span className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-700">
-                      {e.productivity}% <ArrowUpRight className="size-3" />
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <button className="w-full h-12 rounded-xl border border-border bg-surface font-semibold text-sm flex items-center justify-center gap-2 hover:bg-secondary">
-        <ArrowDownRight className="size-4" /> Export {range} report (CSV)
-      </button>
-    </div>
-  );
-}
-
-/* ---------------- Employee Profile ---------------- */
-function EmployeeProfile({ emp, onBack }: { emp: Employee; onBack: () => void }) {
-  return (
-    <div className="max-w-screen-xl mx-auto">
-      <div className="px-4 sm:px-6 pt-4">
-        <button onClick={onBack} className="text-sm text-muted-foreground flex items-center gap-1 mb-3">
-          <X className="size-4" /> Close
-        </button>
-      </div>
-
-      <div className="px-4 sm:px-6 pb-5">
-        <div className="rounded-3xl bg-gradient-to-br from-accent to-secondary p-6 flex items-center gap-4">
-          <div className="h-16 w-16 rounded-2xl bg-background grid place-items-center text-lg font-bold shrink-0">{emp.avatar}</div>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-bold truncate">{emp.name}</h1>
-            <p className="text-sm text-muted-foreground truncate">{emp.role} · {emp.team}</p>
-            <div className="flex items-center gap-2 mt-2">
-              <StatusDot s={emp.status} />
-              <span className="text-xs font-medium capitalize">{emp.status} · {emp.lastActive}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-3 mt-4">
-          <MiniStat icon={<Clock className="size-4" />} label="Today" value={`${emp.todayHours}h`} />
-          <MiniStat icon={<Activity className="size-4" />} label="Activity" value={`${emp.activity}%`} />
-          <MiniStat icon={<Target className="size-4" />} label="Score" value={`${emp.productivity}`} />
-        </div>
-
-        <section className="mt-5">
-          <h2 className="font-semibold mb-3">Activity timeline · today</h2>
-          <div className="rounded-2xl border border-border bg-card p-4">
-            <div className="h-3 rounded-full overflow-hidden flex">
-              <div className="bg-emerald-500" style={{ width: "62%" }} />
-              <div className="bg-amber-500" style={{ width: "18%" }} />
-              <div className="bg-muted" style={{ width: "20%" }} />
-            </div>
-            <div className="flex justify-between text-[11px] text-muted-foreground mt-2 tabular-nums">
-              <span>09:00</span><span>13:00</span><span>18:00</span>
-            </div>
-            <div className="flex gap-4 mt-3 text-xs">
-              <span className="flex items-center gap-1.5"><div className="h-2 w-2 rounded-full bg-emerald-500" /> Active 4h 28m</span>
-              <span className="flex items-center gap-1.5"><div className="h-2 w-2 rounded-full bg-amber-500" /> Idle 1h 18m</span>
-              <span className="flex items-center gap-1.5"><div className="h-2 w-2 rounded-full bg-muted" /> Off</span>
-            </div>
-          </div>
-        </section>
-
-        <section className="mt-5">
-          <h2 className="font-semibold mb-3">Assigned projects</h2>
-          <div className="space-y-2">
-            {PROJECTS.slice(0, 2).map((p) => (
-              <div key={p.id} className="rounded-xl border border-border bg-card p-3 flex items-center gap-3">
-                <div className={`h-9 w-9 rounded-lg ${p.color} grid place-items-center shrink-0`}>
-                  <FolderKanban className="size-4 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm truncate">{p.name}</div>
-                  <div className="text-xs text-muted-foreground">{p.hours}h tracked</div>
-                </div>
-                <ChevronRight className="size-4 text-muted-foreground" />
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="mt-5">
-          <h2 className="font-semibold mb-3">Recent screenshots</h2>
-          <div className="grid grid-cols-3 gap-2">
-            {SCREENSHOTS.slice(0, 6).map((s) => (
-              <div key={s.id} className="aspect-video rounded-lg bg-gradient-to-br from-secondary to-accent border border-border grid place-items-center">
-                <ImageIcon className="size-5 text-muted-foreground" />
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
-    </div>
-  );
-}
-
-/* ---------------- Reusable bits ---------------- */
-function StatCard({ icon, label, value, sub, accent }: {
-  icon: React.ReactNode; label: string; value: string|number; sub: string;
-  accent: "emerald"|"amber"|"indigo"|"neutral";
-}) {
-  const accentBg = {
-    emerald: "bg-emerald-500/10", amber: "bg-amber-500/10",
-    indigo: "bg-indigo-500/10", neutral: "bg-secondary",
-  }[accent];
-  return (
-    <div className="rounded-2xl border border-border bg-card p-3.5">
-      <div className={`h-8 w-8 rounded-lg ${accentBg} grid place-items-center mb-2.5`}>{icon}</div>
-      <div className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide truncate">{label}</div>
-      <div className="text-xl sm:text-2xl font-bold tabular-nums mt-0.5">{value}</div>
-      <div className="text-[11px] text-muted-foreground mt-0.5 truncate">{sub}</div>
-    </div>
-  );
-}
-
-function MiniStat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-border bg-card px-3 py-2.5 text-center">
-      <div className="flex justify-center text-muted-foreground mb-1">{icon}</div>
-      <div className="text-base font-bold tabular-nums leading-none">{value}</div>
-      <div className="text-[10px] text-muted-foreground uppercase tracking-wide mt-1">{label}</div>
-    </div>
-  );
-}
-
-function EmployeeRow({ emp, onClick }: { emp: Employee; onClick: () => void }) {
-  return (
-    <button onClick={onClick} className="w-full text-left rounded-xl border border-border bg-card p-3 flex items-center gap-3 hover:shadow-md hover:border-primary/30 transition">
-      <div className="relative shrink-0">
-        <div className="h-10 w-10 rounded-full bg-accent grid place-items-center text-xs font-bold">{emp.avatar}</div>
-        <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card ${
-          emp.status==="online"?"bg-emerald-500":emp.status==="idle"?"bg-amber-500":"bg-muted-foreground/40"
-        }`} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <div className="font-semibold text-sm truncate">{emp.name}</div>
-        </div>
-        <div className="text-[11px] text-muted-foreground truncate">{emp.role} · {emp.project}</div>
-      </div>
-      <div className="text-right shrink-0">
-        <div className="text-sm font-bold tabular-nums">{emp.todayHours}h</div>
-        <div className={`text-[10px] font-semibold ${
-          emp.activity>=70?"text-emerald-600":emp.activity>=40?"text-amber-600":"text-muted-foreground"
-        }`}>{emp.activity}% active</div>
-      </div>
-    </button>
-  );
-}
-
-function StatusDot({ s }: { s: Status }) {
-  const c = s==="online"?"bg-emerald-500":s==="idle"?"bg-amber-500":"bg-muted-foreground/50";
-  return <span className={`h-2 w-2 rounded-full ${c}`} />;
-}
-
-function ShotThumb({ shot, onClick }: { shot: Screenshot; onClick: () => void }) {
-  return (
-    <button onClick={onClick} className="text-left group">
-      <div className="aspect-video rounded-xl bg-gradient-to-br from-secondary via-accent to-secondary border border-border grid place-items-center relative overflow-hidden group-hover:border-primary/40 transition">
-        <Monitor className="size-6 text-muted-foreground" />
-        <span className="absolute top-1.5 right-1.5 text-[10px] px-1.5 py-0.5 rounded bg-background/90 font-bold tabular-nums">{shot.activity}%</span>
-      </div>
-      <div className="mt-1.5 px-0.5">
-        <div className="text-[11px] font-semibold truncate">{shot.emp}</div>
-        <div className="text-[10px] text-muted-foreground">{shot.time} · {shot.app}</div>
-      </div>
-    </button>
-  );
-}
-
-function MiniChart({ data, labels, colorClass = "bg-primary" }: { data: number[]; labels: string[]; colorClass?: string }) {
-  const max = Math.max(...data);
-  return (
-    <div className="flex items-end gap-1.5 sm:gap-2 h-32">
-      {data.map((v, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
-          <div className="w-full flex-1 flex items-end">
-            <div className={`w-full rounded-t-md ${colorClass} transition-all`} style={{ height: `${(v/max)*100}%` }} />
-          </div>
-          <div className="text-[10px] text-muted-foreground font-medium">{labels[i]}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ---------------- Modals & Sheets ---------------- */
-function NotifSheet({ onClose }: { onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" />
-      <div onClick={(e)=>e.stopPropagation()} className="relative w-full sm:max-w-md bg-background rounded-t-3xl sm:rounded-3xl border border-border max-h-[80vh] flex flex-col">
-        <div className="p-5 border-b border-border flex items-center justify-between">
+      <Card className="p-4">
+        <div className="flex items-center justify-between mb-3">
           <div>
-            <h2 className="font-bold text-lg">Alerts</h2>
-            <p className="text-xs text-muted-foreground">3 unread</p>
+            <div className="text-sm font-semibold">Productivity score</div>
+            <div className="text-xs text-muted-foreground">Average across team today</div>
           </div>
-          <button onClick={onClose} className="h-8 w-8 grid place-items-center rounded-lg hover:bg-secondary"><X className="size-4" /></button>
+          <div className="text-3xl font-bold text-primary">{stats?.avgScore ?? "0"}%</div>
         </div>
-        <div className="overflow-y-auto p-3 space-y-2">
-          {NOTIFICATIONS.map((n) => (
-            <div key={n.id} className="rounded-xl border border-border bg-card p-3 flex items-start gap-3">
-              <div className={`h-9 w-9 rounded-lg grid place-items-center shrink-0 ${
-                n.type==="idle"?"bg-amber-500/15 text-amber-700":
-                n.type==="missing"?"bg-rose-500/15 text-rose-700":"bg-indigo-500/15 text-indigo-700"
-              }`}>
-                <AlertCircle className="size-4" />
+        <ProductivityBreakdown companyId={companyId} />
+      </Card>
+
+      <Card className="p-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-sm font-semibold">Pending screenshot reviews</div>
+          <Badge variant="secondary">{stats?.pendingScreens ?? 0}</Badge>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Open the <strong>Screens</strong> tab to approve or reject pending screenshots.
+        </p>
+      </Card>
+    </div>
+  );
+}
+
+function EmployeeHome() {
+  const { user, companyId, profile } = useAuth();
+  const [tracking, setTracking] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const [onBreak, setOnBreak] = useState(false);
+
+  useEffect(() => {
+    if (!tracking || onBreak) return;
+    const id = setInterval(() => setSeconds((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [tracking, onBreak]);
+
+  const { data: today } = useQuery({
+    enabled: !!user,
+    queryKey: ["my-attendance", user?.id],
+    queryFn: async () => {
+      const date = new Date().toISOString().slice(0, 10);
+      const { data } = await supabase
+        .from("attendance")
+        .select("*")
+        .eq("user_id", user!.id)
+        .eq("work_date", date)
+        .maybeSingle();
+      return data;
+    },
+  });
+
+  async function clockAction(action: "in" | "out" | "break") {
+    if (!user || !companyId) return;
+    const date = new Date().toISOString().slice(0, 10);
+    if (action === "in") {
+      await supabase
+        .from("attendance")
+        .upsert({
+          user_id: user.id,
+          company_id: companyId,
+          work_date: date,
+          clock_in: new Date().toISOString(),
+          status: "present",
+          active_seconds: seconds,
+        });
+      setTracking(true);
+      setOnBreak(false);
+      toast.success("Clocked in");
+    } else if (action === "out") {
+      await supabase
+        .from("attendance")
+        .update({
+          clock_out: new Date().toISOString(),
+          status: "clocked_out",
+          active_seconds: seconds,
+        })
+        .eq("user_id", user.id)
+        .eq("work_date", date);
+      setTracking(false);
+      toast.success("Clocked out");
+    } else {
+      setOnBreak((b) => !b);
+      await supabase
+        .from("attendance")
+        .update({ status: onBreak ? "present" : "on_break" })
+        .eq("user_id", user.id)
+        .eq("work_date", date);
+    }
+  }
+
+  const fmt = (s: number) =>
+    `${String(Math.floor(s / 3600)).padStart(2, "0")}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-6 text-center bg-gradient-to-br from-primary/10 to-accent/40">
+        <div className="text-xs uppercase font-semibold text-muted-foreground">Today</div>
+        <div className="text-5xl font-bold font-mono my-3">{fmt(seconds)}</div>
+        <Badge variant={tracking ? "default" : "secondary"}>
+          {tracking ? (onBreak ? "On break" : "Tracking…") : "Idle"}
+        </Badge>
+        <div className="flex gap-2 mt-4 justify-center flex-wrap">
+          {!tracking ? (
+            <Button onClick={() => clockAction("in")}>
+              <Play className="w-4 h-4" /> Clock in
+            </Button>
+          ) : (
+            <>
+              <Button variant="secondary" onClick={() => clockAction("break")}>
+                {onBreak ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+                {onBreak ? "Resume" : "Break"}
+              </Button>
+              <Button variant="destructive" onClick={() => clockAction("out")}>
+                <Square className="w-4 h-4" /> Clock out
+              </Button>
+            </>
+          )}
+        </div>
+      </Card>
+
+      <div className="grid grid-cols-3 gap-3">
+        <StatCard label="Active" value={fmt(today?.active_seconds ?? seconds)} icon={Activity} accent="success" small />
+        <StatCard label="Idle" value={fmt(today?.idle_seconds ?? 0)} icon={Clock} accent="warning" small />
+        <StatCard label="Score" value={`${today?.productivity_score ?? "—"}`} icon={TrendingUp} small />
+      </div>
+
+      <Card className="p-4">
+        <div className="text-sm font-semibold mb-2">My productivity breakdown</div>
+        <ProductivityBreakdown userOnly={user?.id} />
+      </Card>
+    </div>
+  );
+}
+
+// =================== TEAM TAB (admin) ===================
+function TeamTab() {
+  const { companyId } = useAuth();
+  const { data: members } = useQuery({
+    enabled: !!companyId,
+    queryKey: ["team", companyId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, job_title, phone")
+        .eq("company_id", companyId!);
+      return data ?? [];
+    },
+  });
+  const { data: invites } = useQuery({
+    enabled: !!companyId,
+    queryKey: ["invites", companyId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("invite_codes")
+        .select("code, intended_name, job_title, used_at, created_at")
+        .eq("company_id", companyId!)
+        .order("created_at", { ascending: false });
+      return data ?? [];
+    },
+  });
+
+  return (
+    <div className="space-y-5">
+      <Card className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold">Team members</h2>
+          <Badge variant="secondary">{members?.length ?? 0}</Badge>
+        </div>
+        <div className="space-y-2">
+          {members?.map((m) => (
+            <div key={m.id} className="flex items-center justify-between p-2 rounded hover:bg-muted">
+              <div>
+                <div className="font-medium">{m.full_name ?? "Unnamed"}</div>
+                <div className="text-xs text-muted-foreground">
+                  {m.job_title ?? "—"} · {m.email}
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold text-sm truncate">{n.title}</div>
-                <div className="text-xs text-muted-foreground">{n.desc}</div>
-              </div>
-              <span className="text-[10px] text-muted-foreground shrink-0">{n.time}</span>
+              <Shield className="w-4 h-4 text-success" />
             </div>
           ))}
+          {(!members || members.length === 0) && (
+            <p className="text-sm text-muted-foreground">No team members yet.</p>
+          )}
         </div>
+      </Card>
+
+      <Card className="p-4">
+        <h2 className="font-semibold mb-3">Invite codes</h2>
+        <div className="space-y-2">
+          {invites?.map((i) => (
+            <div key={i.code} className="flex items-center justify-between p-2 rounded bg-muted text-sm">
+              <div>
+                <code className="font-mono font-bold">{i.code}</code>
+                <span className="ml-2 text-muted-foreground">{i.intended_name ?? "—"}</span>
+              </div>
+              {i.used_at ? (
+                <Badge variant="secondary">Used</Badge>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    navigator.clipboard.writeText(i.code);
+                    toast.success("Copied");
+                  }}
+                >
+                  <Copy className="w-3 h-3" />
+                </Button>
+              )}
+            </div>
+          ))}
+          {(!invites || invites.length === 0) && (
+            <p className="text-sm text-muted-foreground">
+              Generate invite codes from the onboarding flow or here later.
+            </p>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// =================== SCREENSHOTS TAB ===================
+function ScreensTab({ role }: { role: AppRole }) {
+  const { companyId, user } = useAuth();
+  const qc = useQueryClient();
+  const review = useServerFn(reviewScreenshot);
+
+  const isAdmin = role !== "employee";
+  const queryKey = isAdmin ? ["screens-co", companyId] : ["screens-me", user?.id];
+  const { data: screens } = useQuery({
+    enabled: !!(isAdmin ? companyId : user),
+    queryKey,
+    queryFn: async () => {
+      let q = supabase
+        .from("screenshots")
+        .select("id, captured_at, activity_label, app_name, status, image_url, user_id")
+        .order("captured_at", { ascending: false })
+        .limit(50);
+      q = isAdmin ? q.eq("company_id", companyId!) : q.eq("user_id", user!.id);
+      const { data } = await q;
+      return data ?? [];
+    },
+  });
+
+  async function decide(id: string, decision: "approved" | "rejected") {
+    try {
+      await review({ data: { screenshotId: id, decision } });
+      toast.success(`Marked ${decision}`);
+      qc.invalidateQueries({ queryKey });
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <h2 className="font-semibold">
+        {isAdmin ? "Screenshot reviews" : "My screenshots"}
+      </h2>
+      {(!screens || screens.length === 0) && (
+        <Card className="p-8 text-center text-sm text-muted-foreground">
+          No screenshots yet. They'll appear here once captured.
+        </Card>
+      )}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {screens?.map((s) => (
+          <Card key={s.id} className="p-3">
+            <div className="aspect-video rounded bg-muted flex items-center justify-center mb-2 overflow-hidden">
+              {s.image_url ? (
+                <img src={s.image_url} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <Camera className="w-8 h-8 text-muted-foreground" />
+              )}
+            </div>
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs font-medium">{s.app_name ?? s.activity_label ?? "Activity"}</div>
+              <Badge
+                variant={
+                  s.status === "approved" ? "default" : s.status === "rejected" ? "destructive" : "secondary"
+                }
+                className="text-[10px]"
+              >
+                {s.status}
+              </Badge>
+            </div>
+            <div className="text-[10px] text-muted-foreground mb-2">
+              {new Date(s.captured_at).toLocaleString()}
+            </div>
+            {isAdmin && s.status === "pending" && (
+              <div className="flex gap-1">
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="flex-1 h-8 text-xs"
+                  onClick={() => decide(s.id, "approved")}
+                >
+                  <CheckCircle2 className="w-3 h-3" /> Approve
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="flex-1 h-8 text-xs"
+                  onClick={() => decide(s.id, "rejected")}
+                >
+                  <XCircle className="w-3 h-3" /> Reject
+                </Button>
+              </div>
+            )}
+          </Card>
+        ))}
       </div>
     </div>
   );
 }
 
-function ClockModal({ onClose }: { onClose: () => void }) {
-  const [step, setStep] = useState<"choose"|"done">("choose");
-  const [action, setAction] = useState<"in"|"out"|"break"|null>(null);
-  const doIt = (a: "in"|"out"|"break") => { setAction(a); setStep("done"); };
+// =================== PROJECTS ===================
+function ProjectsTab({ role }: { role: AppRole }) {
+  const { companyId } = useAuth();
+  const qc = useQueryClient();
+  const { data: projects } = useQuery({
+    enabled: !!companyId,
+    queryKey: ["projects", companyId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("company_id", companyId!)
+        .order("created_at", { ascending: false });
+      return data ?? [];
+    },
+  });
+
+  const [name, setName] = useState("");
+  const canManage = role !== "employee";
+
+  async function addProject() {
+    if (!name.trim() || !companyId) return;
+    const { error } = await supabase
+      .from("projects")
+      .insert({ name: name.trim(), company_id: companyId, status: "active" });
+    if (error) toast.error(error.message);
+    else {
+      setName("");
+      qc.invalidateQueries({ queryKey: ["projects", companyId] });
+      toast.success("Project added");
+    }
+  }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" />
-      <div onClick={(e)=>e.stopPropagation()} className="relative w-full sm:max-w-sm bg-background rounded-t-3xl sm:rounded-3xl border border-border p-6">
-        {step==="choose" ? (
-          <>
-            <h2 className="font-bold text-lg mb-1">Attendance</h2>
-            <p className="text-xs text-muted-foreground mb-5">Choose an action</p>
-            <div className="grid grid-cols-3 gap-2">
-              <button onClick={()=>doIt("in")} className="aspect-square rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col items-center justify-center gap-2 active:scale-95">
-                <LogIn className="size-6 text-emerald-700" />
-                <span className="text-xs font-semibold text-emerald-700">Clock in</span>
-              </button>
-              <button onClick={()=>doIt("break")} className="aspect-square rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col items-center justify-center gap-2 active:scale-95">
-                <Coffee className="size-6 text-amber-700" />
-                <span className="text-xs font-semibold text-amber-700">Break</span>
-              </button>
-              <button onClick={()=>doIt("out")} className="aspect-square rounded-2xl bg-rose-500/10 border border-rose-500/20 flex flex-col items-center justify-center gap-2 active:scale-95">
-                <LogOut className="size-6 text-rose-700" />
-                <span className="text-xs font-semibold text-rose-700">Clock out</span>
-              </button>
-            </div>
-          </>
-        ) : (
-          <div className="text-center py-4">
-            <div className="h-16 w-16 rounded-full bg-emerald-500/15 grid place-items-center mx-auto mb-4">
-              <CheckCircle2 className="size-8 text-emerald-600" />
-            </div>
-            <h2 className="font-bold text-lg">
-              {action==="in"?"Clocked in":action==="break"?"On break":"Clocked out"}
-            </h2>
-            <p className="text-sm text-muted-foreground mt-1 tabular-nums">at {new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"})}</p>
-            <button onClick={onClose} className="mt-6 w-full h-12 rounded-xl bg-foreground text-background font-semibold">Done</button>
+    <div className="space-y-4">
+      {canManage && (
+        <Card className="p-4">
+          <div className="flex gap-2">
+            <input
+              className="flex-1 h-9 rounded-md border bg-transparent px-3 text-sm"
+              placeholder="New project name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <Button onClick={addProject}>Add</Button>
           </div>
-        )}
+        </Card>
+      )}
+      {projects?.map((p) => (
+        <Card key={p.id} className="p-4 flex items-center justify-between">
+          <div>
+            <div className="font-semibold">{p.name}</div>
+            <div className="text-xs text-muted-foreground">{p.description ?? "—"}</div>
+          </div>
+          <Badge variant={p.status === "active" ? "default" : "secondary"}>{p.status}</Badge>
+        </Card>
+      ))}
+      {(!projects || projects.length === 0) && (
+        <Card className="p-8 text-center text-sm text-muted-foreground">
+          No projects yet.
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// =================== REPORTS ===================
+function ReportsTab() {
+  const { companyId } = useAuth();
+  const { data } = useQuery({
+    enabled: !!companyId,
+    queryKey: ["report-att", companyId],
+    queryFn: async () => {
+      const since = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+      const { data } = await supabase
+        .from("attendance")
+        .select("work_date, active_seconds, idle_seconds, productivity_score")
+        .eq("company_id", companyId!)
+        .gte("work_date", since);
+      return data ?? [];
+    },
+  });
+
+  const chart = useMemo(() => {
+    const map = new Map<string, { date: string; active: number; idle: number; score: number; n: number }>();
+    (data ?? []).forEach((row) => {
+      const m = map.get(row.work_date) ?? { date: row.work_date, active: 0, idle: 0, score: 0, n: 0 };
+      m.active += (row.active_seconds ?? 0) / 3600;
+      m.idle += (row.idle_seconds ?? 0) / 3600;
+      m.score += Number(row.productivity_score ?? 0);
+      m.n += 1;
+      map.set(row.work_date, m);
+    });
+    return Array.from(map.values())
+      .map((m) => ({ ...m, score: Math.round(m.score / Math.max(m.n, 1)) }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [data]);
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-4">
+        <h2 className="font-semibold mb-3">Hours worked (last 7 days)</h2>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chart}>
+              <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="active" stackId="a" fill="var(--color-primary)" name="Active hrs" />
+              <Bar dataKey="idle" stackId="a" fill="var(--color-warning)" name="Idle hrs" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+      <Card className="p-4">
+        <h2 className="font-semibold mb-3">Average productivity score</h2>
+        <div className="h-48">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chart}>
+              <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
+              <Tooltip />
+              <Bar dataKey="score" fill="var(--color-success)" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// =================== SHARED ===================
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  accent,
+  small,
+}: {
+  label: string;
+  value: string | number;
+  icon: React.ElementType;
+  accent?: "success" | "warning";
+  small?: boolean;
+}) {
+  const color =
+    accent === "success" ? "text-success" : accent === "warning" ? "text-warning" : "text-primary";
+  return (
+    <Card className="p-3">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <Icon className={`w-4 h-4 ${color}`} />
+      </div>
+      <div className={`font-bold ${small ? "text-base font-mono" : "text-2xl"}`}>{value}</div>
+    </Card>
+  );
+}
+
+function ProductivityBreakdown({
+  companyId,
+  userOnly,
+}: {
+  companyId?: string | null;
+  userOnly?: string;
+}) {
+  const { data } = useQuery({
+    enabled: !!(companyId || userOnly),
+    queryKey: ["prod-breakdown", companyId ?? "u", userOnly ?? "c"],
+    queryFn: async () => {
+      const today = new Date().toISOString().slice(0, 10);
+      let q = supabase
+        .from("productivity_entries")
+        .select("active_minutes, idle_minutes, break_minutes, tasks_completed, tasks_total")
+        .eq("entry_date", today);
+      if (userOnly) q = q.eq("user_id", userOnly);
+      else if (companyId) q = q.eq("company_id", companyId);
+      const { data } = await q;
+      return data ?? [];
+    },
+  });
+
+  const totals = (data ?? []).reduce(
+    (acc, r) => {
+      acc.active += r.active_minutes;
+      acc.idle += r.idle_minutes;
+      acc.break += r.break_minutes;
+      acc.done += r.tasks_completed;
+      acc.total += r.tasks_total;
+      return acc;
+    },
+    { active: 0, idle: 0, break: 0, done: 0, total: 0 },
+  );
+
+  const breakAdherence = totals.break > 0 ? Math.min(100, Math.round((45 / Math.max(totals.break, 1)) * 100)) : 100;
+  const taskProgress = totals.total > 0 ? Math.round((totals.done / totals.total) * 100) : 0;
+
+  const pieData = [
+    { name: "Active", value: totals.active, color: "var(--color-primary)" },
+    { name: "Idle", value: totals.idle, color: "var(--color-warning)" },
+    { name: "Break", value: totals.break, color: "var(--color-muted-foreground)" },
+  ];
+
+  return (
+    <div className="grid sm:grid-cols-2 gap-4">
+      <div className="h-44">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie data={pieData} dataKey="value" innerRadius={40} outerRadius={70} paddingAngle={2}>
+              {pieData.map((p) => (
+                <Cell key={p.name} fill={p.color} />
+              ))}
+            </Pie>
+            <Tooltip />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="space-y-3 text-sm">
+        <Metric label="Active time" value={`${totals.active}m`} color="bg-primary" pct={Math.min(100, (totals.active / Math.max(totals.active + totals.idle + totals.break, 1)) * 100)} />
+        <Metric label="Idle time" value={`${totals.idle}m`} color="bg-warning" pct={Math.min(100, (totals.idle / Math.max(totals.active + totals.idle + totals.break, 1)) * 100)} />
+        <Metric label="Break adherence" value={`${breakAdherence}%`} color="bg-success" pct={breakAdherence} />
+        <Metric label="Task progress" value={`${totals.done}/${totals.total}`} color="bg-primary" pct={taskProgress} />
       </div>
     </div>
   );
 }
 
-function ShotModal({ shot, onClose }: { shot: Screenshot; onClose: () => void }) {
+function Metric({ label, value, pct, color }: { label: string; value: string; pct: number; color: string }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center p-0 sm:p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-foreground/60 backdrop-blur-sm" />
-      <div onClick={(e)=>e.stopPropagation()} className="relative w-full sm:max-w-2xl bg-background rounded-t-3xl sm:rounded-2xl border border-border overflow-hidden">
-        <div className="aspect-video bg-gradient-to-br from-secondary via-accent to-secondary grid place-items-center">
-          <Monitor className="size-16 text-muted-foreground" />
-        </div>
-        <div className="p-5">
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div className="min-w-0">
-              <h2 className="font-bold truncate">{shot.emp}</h2>
-              <p className="text-xs text-muted-foreground">{shot.time} · {shot.app}</p>
-            </div>
-            <span className="shrink-0 px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-700 text-xs font-bold tabular-nums">{shot.activity}% active</span>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button className="h-10 rounded-xl bg-secondary font-semibold text-sm flex items-center justify-center gap-2"><Eye className="size-4" /> View full</button>
-            <button onClick={onClose} className="h-10 rounded-xl bg-foreground text-background font-semibold text-sm">Close</button>
-          </div>
-        </div>
+    <div>
+      <div className="flex justify-between text-xs mb-1">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="font-semibold">{value}</span>
+      </div>
+      <div className="h-2 bg-muted rounded-full overflow-hidden">
+        <div className={`h-full ${color}`} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
