@@ -96,13 +96,15 @@ function AppShell({ role }: { role: AppRole }) {
   const navigate = useNavigate();
 
   // employees only get home + screens (their own) + their projects
-  const tabs: { id: Tab; label: string; icon: React.ElementType; allow: AppRole[] }[] = [
-    { id: "home", label: "Home", icon: LayoutDashboard, allow: ["super_admin", "company_admin", "employee"] },
-    { id: "team", label: "Team", icon: Users, allow: ["super_admin", "company_admin"] },
-    { id: "screens", label: "Screens", icon: Camera, allow: ["super_admin", "company_admin", "employee"] },
-    { id: "projects", label: "Projects", icon: FolderKanban, allow: ["super_admin", "company_admin", "employee"] },
-    { id: "reports", label: "Reports", icon: BarChart3, allow: ["super_admin", "company_admin"] },
-  ].filter((t) => t.allow.includes(role));
+  const tabs: { id: Tab; label: string; icon: React.ElementType; allow: AppRole[] }[] = (
+    [
+      { id: "home", label: "Home", icon: LayoutDashboard, allow: ["super_admin", "company_admin", "employee"] },
+      { id: "team", label: "Team", icon: Users, allow: ["super_admin", "company_admin"] },
+      { id: "screens", label: "Screens", icon: Camera, allow: ["super_admin", "company_admin", "employee"] },
+      { id: "projects", label: "Projects", icon: FolderKanban, allow: ["super_admin", "company_admin", "employee"] },
+      { id: "reports", label: "Reports", icon: BarChart3, allow: ["super_admin", "company_admin"] },
+    ] as { id: Tab; label: string; icon: React.ElementType; allow: AppRole[] }[]
+  ).filter((t) => t.allow.includes(role));
 
   return (
     <div className="min-h-screen bg-background pb-24">
