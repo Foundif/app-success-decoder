@@ -1110,18 +1110,22 @@ function DrillStat({
 }
 
 // ---------- AUDIT LOG ----------
-const AUDIT_CATEGORIES = [
+const AUDIT_CATEGORIES: ReadonlyArray<{
+  id: string;
+  label: string;
+  match?: readonly string[];
+}> = [
   { id: "all", label: "All events" },
   { id: "screenshot", label: "Screenshots", match: ["screenshot."] },
   { id: "onboarding", label: "Onboarding & invites", match: ["company.", "staff.", "invite"] },
   { id: "productivity", label: "Productivity", match: ["productivity.", "attendance."] },
-] as const;
+];
 
 function AuditLogView() {
   const { companyId } = useAuth();
   const today = new Date().toISOString().slice(0, 10);
   const weekAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
-  const [category, setCategory] = useState<(typeof AUDIT_CATEGORIES)[number]["id"]>("all");
+  const [category, setCategory] = useState<string>("all");
   const [employeeId, setEmployeeId] = useState<string>("all");
   const [from, setFrom] = useState(weekAgo);
   const [to, setTo] = useState(today);
@@ -1263,7 +1267,7 @@ type AuditRowData = {
   action: string;
   entity_type: string | null;
   entity_id: string | null;
-  metadata: Record<string, unknown> | null;
+  metadata: unknown;
 };
 
 function AuditRow({
