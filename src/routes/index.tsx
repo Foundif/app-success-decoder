@@ -1300,14 +1300,18 @@ function AuditRow({
             </>
           )}
         </div>
-        {row.metadata && Object.keys(row.metadata).length > 0 && (
-          <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
-            {Object.entries(row.metadata)
-              .filter(([, v]) => v != null && v !== "")
-              .map(([k, v]) => `${k}: ${String(v)}`)
-              .join(" · ")}
-          </div>
-        )}
+        {(() => {
+          const md = row.metadata as Record<string, unknown> | null;
+          if (!md || typeof md !== "object" || Object.keys(md).length === 0) return null;
+          return (
+            <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
+              {Object.entries(md)
+                .filter(([, v]) => v != null && v !== "")
+                .map(([k, v]) => `${k}: ${String(v)}`)
+                .join(" · ")}
+            </div>
+          );
+        })()}
       </div>
       <div className="text-[11px] text-muted-foreground shrink-0">
         {new Date(row.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
