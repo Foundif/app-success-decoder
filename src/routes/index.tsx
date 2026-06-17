@@ -24,7 +24,24 @@ import {
   Copy,
   Briefcase,
   ChevronRight,
+  FileText,
+  Filter,
+  History,
+  UserCheck,
+  KeyRound,
+  CameraIcon,
 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import {
   BarChart,
   Bar,
@@ -490,51 +507,148 @@ function TeamTab() {
 }
 
 // =================== SCREENSHOTS TAB ===================
+type ScreenStatus = "all" | "pending" | "approved" | "rejected";
+
 function ScreensTab({ role }: { role: AppRole }) {
   const { companyId, user } = useAuth();
   const qc = useQueryClient();
   const review = useServerFn(reviewScreenshot);
-
   const isAdmin = role !== "employee";
-  const queryKey = isAdmin ? ["screens-co", companyId] : ["screens-me", user?.id];
+
+  const [filter, setFilter] = useState<ScreenStatus>(isAdmin ? "pending" : "all");
+  const [reviewOpen, setReviewOpen] = useState<null | {
+    id: string;
+    decision: "approved" | "rejected";
+    label: string;
+  }>(null);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const queryKey = isAdmin
+    ? ["screens-co", companyId, filter]
+    : ["screens-me", user?.id, filter];
+
   const { data: screens } = useQuery({
     enabled: !!(isAdmin ? companyId : user),
     queryKey,
     queryFn: async () => {
       let q = supabase
         .from("screenshots")
-        .select("id, captured_at, activity_label, app_name, status, image_url, user_id")
+        .select(
+          "id, captured_at, activity_label, app_name, status, image_url, user_id, review_note, reviewed_at",
+        )
         .order("captured_at", { ascending: false })
-        .limit(50);
+        .limit(100);
       q = isAdmin ? q.eq("company_id", companyId!) : q.eq("user_id", user!.id);
+      if (filter !== "all") q = q.eq("status", filter);
       const { data } = await q;
       return data ?? [];
     },
   });
 
-  async function decide(id: string, decision: "approved" | "rejected") {
+  const { data: counts } = useQuery({
+    enabled: !!(isAdmin ? companyId : user),
+    queryKey: [...(isAdmin ? ["screen-counts-co", companyId] : ["screen-counts-me", user?.id])],
+    queryFn: async () => {
+      const base = () => {
+        let b = supabase.from("screenshots").select("status", { count: "exact", head: true });
+        return isAdmin ? b.eq("company_id", companyId!) : b.eq("user_id", user!.id);
+      };
+      const [p, a, r, all] = await Promise.all([
+        base().eq("status", "pending"),
+        base().eq("status", "approved"),
+        base().eq("status", "rejected"),
+        base(),
+      ]);
+      return {
+        pending: p.count ?? 0,
+        approved: a.count ?? 0,
+        rejected: r.count ?? 0,
+        all: all.count ?? 0,
+      };
+    },
+  });
+
+  async function submitReview() {
+    if (!reviewOpen) return;
+    setBusy(true);
     try {
-      await review({ data: { screenshotId: id, decision } });
-      toast.success(`Marked ${decision}`);
+      await review({
+        data: { screenshotId: reviewOpen.id, decision: reviewOpen.decision, note: note || undefined },
+      });
+      toast.success(`Marked ${reviewOpen.decision}`);
       qc.invalidateQueries({ queryKey });
+      qc.invalidateQueries({
+        queryKey: isAdmin ? ["screen-counts-co", companyId] : ["screen-counts-me", user?.id],
+      });
+      setReviewOpen(null);
+      setNote("");
     } catch (e) {
       toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
 
+  function openReview(id: string, decision: "approved" | "rejected", label: string) {
+    setReviewOpen({ id, decision, label });
+    setNote("");
+  }
+
+  const filters: { id: ScreenStatus; label: string; count: number }[] = [
+    { id: "pending", label: "Pending", count: counts?.pending ?? 0 },
+    { id: "approved", label: "Approved", count: counts?.approved ?? 0 },
+    { id: "rejected", label: "Rejected", count: counts?.rejected ?? 0 },
+    { id: "all", label: "All", count: counts?.all ?? 0 },
+  ];
+
   return (
     <div className="space-y-4">
-      <h2 className="font-semibold">
-        {isAdmin ? "Screenshot reviews" : "My screenshots"}
-      </h2>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="font-semibold text-lg">
+            {isAdmin ? "Screenshot review queue" : "My screenshots"}
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            {isAdmin
+              ? "Approve or reject captured screenshots. All decisions are recorded in audit logs."
+              : "Status updates from your reviewer appear here."}
+          </p>
+        </div>
+        {isAdmin && (counts?.pending ?? 0) > 0 && (
+          <Badge variant="secondary" className="text-xs">
+            <Filter className="w-3 h-3" /> {counts?.pending} awaiting review
+          </Badge>
+        )}
+      </div>
+
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
+        {filters.map((f) => (
+          <button
+            key={f.id}
+            onClick={() => setFilter(f.id)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border whitespace-nowrap transition-colors ${
+              filter === f.id
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-card hover:bg-muted border-border text-muted-foreground"
+            }`}
+          >
+            {f.label}
+            <span className="ml-1.5 opacity-70">{f.count}</span>
+          </button>
+        ))}
+      </div>
+
       {(!screens || screens.length === 0) && (
-        <Card className="p-8 text-center text-sm text-muted-foreground">
-          No screenshots yet. They'll appear here once captured.
+        <Card className="p-10 text-center">
+          <CameraIcon className="w-8 h-8 text-muted-foreground/60 mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">No screenshots in this view.</p>
         </Card>
       )}
+
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {screens?.map((s) => (
-          <Card key={s.id} className="p-3">
+          <Card key={s.id} className="p-3 flex flex-col">
             <div className="aspect-video rounded bg-muted flex items-center justify-center mb-2 overflow-hidden">
               {s.image_url ? (
                 <img src={s.image_url} alt="" className="w-full h-full object-cover" />
@@ -543,10 +657,16 @@ function ScreensTab({ role }: { role: AppRole }) {
               )}
             </div>
             <div className="flex items-center justify-between mb-1">
-              <div className="text-xs font-medium">{s.app_name ?? s.activity_label ?? "Activity"}</div>
+              <div className="text-xs font-medium truncate">
+                {s.app_name ?? s.activity_label ?? "Activity"}
+              </div>
               <Badge
                 variant={
-                  s.status === "approved" ? "default" : s.status === "rejected" ? "destructive" : "secondary"
+                  s.status === "approved"
+                    ? "default"
+                    : s.status === "rejected"
+                      ? "destructive"
+                      : "secondary"
                 }
                 className="text-[10px]"
               >
@@ -556,13 +676,20 @@ function ScreensTab({ role }: { role: AppRole }) {
             <div className="text-[10px] text-muted-foreground mb-2">
               {new Date(s.captured_at).toLocaleString()}
             </div>
+            {s.review_note && (
+              <div className="text-[11px] p-2 rounded bg-muted/60 mb-2 line-clamp-2">
+                <span className="font-semibold">Note:</span> {s.review_note}
+              </div>
+            )}
             {isAdmin && s.status === "pending" && (
-              <div className="flex gap-1">
+              <div className="flex gap-1 mt-auto">
                 <Button
                   size="sm"
                   variant="default"
                   className="flex-1 h-8 text-xs"
-                  onClick={() => decide(s.id, "approved")}
+                  onClick={() =>
+                    openReview(s.id, "approved", s.app_name ?? s.activity_label ?? "Screenshot")
+                  }
                 >
                   <CheckCircle2 className="w-3 h-3" /> Approve
                 </Button>
@@ -570,7 +697,9 @@ function ScreensTab({ role }: { role: AppRole }) {
                   size="sm"
                   variant="destructive"
                   className="flex-1 h-8 text-xs"
-                  onClick={() => decide(s.id, "rejected")}
+                  onClick={() =>
+                    openReview(s.id, "rejected", s.app_name ?? s.activity_label ?? "Screenshot")
+                  }
                 >
                   <XCircle className="w-3 h-3" /> Reject
                 </Button>
@@ -579,6 +708,55 @@ function ScreensTab({ role }: { role: AppRole }) {
           </Card>
         ))}
       </div>
+
+      <Dialog open={!!reviewOpen} onOpenChange={(o) => !o && setReviewOpen(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {reviewOpen?.decision === "approved" ? (
+                <CheckCircle2 className="w-5 h-5 text-success" />
+              ) : (
+                <XCircle className="w-5 h-5 text-destructive" />
+              )}
+              {reviewOpen?.decision === "approved" ? "Approve" : "Reject"} screenshot
+            </DialogTitle>
+            <DialogDescription>
+              Add an optional note for the employee. This decision is recorded in the audit log.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <div className="text-xs text-muted-foreground">{reviewOpen?.label}</div>
+            <Textarea
+              placeholder={
+                reviewOpen?.decision === "approved"
+                  ? "Great focus — keep it up."
+                  : "e.g. Off-topic activity, please re-check task assignment."
+              }
+              rows={4}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setReviewOpen(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant={reviewOpen?.decision === "rejected" ? "destructive" : "default"}
+              onClick={submitReview}
+              disabled={busy}
+            >
+              {busy ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : reviewOpen?.decision === "approved" ? (
+                "Approve"
+              ) : (
+                "Reject"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
