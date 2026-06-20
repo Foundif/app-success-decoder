@@ -182,20 +182,24 @@ function AppShell({ role }: { role: AppRole }) {
     setTab(id);
   }
 
+  const roleLabel = isAdmin ? "Business Operations" : "Team Member";
+
   return (
     <div className="min-h-screen bg-background flex">
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex w-60 shrink-0 border-r bg-card flex-col sticky top-0 h-screen">
-        <div className="flex items-center gap-2 px-4 py-4 border-b">
-          <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
-            <Briefcase className="w-4 h-4 text-primary-foreground" />
+      <aside className="hidden lg:flex w-72 shrink-0 border-r bg-card flex-col sticky top-0 h-screen">
+        <div className="flex items-center gap-3 px-5 py-5 border-b">
+          <div className="w-11 h-11 rounded-2xl bg-foreground flex items-center justify-center shadow-sm">
+            <Briefcase className="w-5 h-5 text-background" />
           </div>
-          <div>
-            <div className="font-bold leading-none">TillTask</div>
-            <div className="text-xs text-muted-foreground capitalize">{role.replace("_", " ")}</div>
+          <div className="min-w-0">
+            <div className="font-bold text-lg leading-tight truncate">TillTask</div>
+            <div className="text-[10px] tracking-widest uppercase text-muted-foreground font-semibold truncate">
+              {roleLabel}
+            </div>
           </div>
         </div>
-        <nav className="flex-1 p-2 space-y-0.5">
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {tabs.map((t) => {
             const Icon = t.icon;
             const active = tab === t.id;
@@ -203,36 +207,60 @@ function AppShell({ role }: { role: AppRole }) {
               <button
                 key={t.id}
                 onClick={() => handleTab(t.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[15px] font-medium transition-colors ${
+                  active
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                 }`}
               >
-                <Icon className="w-4 h-4" />
-                {t.label}
+                <Icon className="w-5 h-5 shrink-0" />
+                <span className="truncate">{t.label}</span>
               </button>
             );
           })}
           {isAdmin && (
             <button
               onClick={() => navigate({ to: "/pricing" })}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[15px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground"
             >
-              <DollarSign className="w-4 h-4" />
+              <DollarSign className="w-5 h-5 shrink-0" />
               Pricing
             </button>
           )}
         </nav>
-        <div className="p-2 border-t">
-          <div className="px-3 py-2 text-xs">
-            <div className="font-medium truncate">{profile?.full_name ?? profile?.email}</div>
-            <div className="text-muted-foreground truncate">{profile?.job_title ?? ""}</div>
-          </div>
+        <div className="p-3 border-t space-y-3">
+          {isAdmin && (
+            <div className="rounded-2xl border bg-muted/50 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-sm font-semibold capitalize">
+                  <DollarSign className="w-4 h-4 text-primary" />
+                  {plan.tier ?? (plan.status === "trial" ? "Trial" : "Free")}
+                </div>
+                {plan.status === "trial" && (
+                  <span className="text-[10px] text-muted-foreground font-medium">
+                    {plan.daysLeft}d left
+                  </span>
+                )}
+              </div>
+              <div className="text-xs text-muted-foreground truncate">
+                {profile?.full_name ?? profile?.email}
+              </div>
+              {(plan.readonly || !plan.tier) && (
+                <button
+                  onClick={() => navigate({ to: "/pricing" })}
+                  className="w-full bg-foreground text-background rounded-xl py-2.5 text-sm font-semibold hover:opacity-90 transition"
+                >
+                  Upgrade to Pro
+                </button>
+              )}
+            </div>
+          )}
           <button
             onClick={async () => {
               await signOut();
               navigate({ to: "/auth" });
             }}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-muted"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium border bg-card hover:bg-muted transition"
           >
             <LogOut className="w-4 h-4" /> Sign out
           </button>
@@ -687,16 +715,19 @@ function EmployeeHome() {
 
 // =================== TEAM TAB (admin) ===================
 function TeamTab() {
-  const { companyId } = useAuth();
+  const { companyId, user } = useAuth();
   const { data: members } = useQuery({
     enabled: !!companyId,
-    queryKey: ["team", companyId],
+    queryKey: ["team", companyId, user?.id],
     queryFn: async () => {
       const { data } = await supabase
         .from("profiles")
         .select("id, full_name, email, job_title, phone")
         .eq("company_id", companyId!);
-      return data ?? [];
+      // Exclude the current admin's own profile and any placeholder rows with no name and no email
+      return (data ?? []).filter(
+        (m) => m.id !== user?.id && (m.full_name?.trim() || m.email?.trim()),
+      );
     },
   });
   const { data: invites } = useQuery({
