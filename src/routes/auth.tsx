@@ -308,7 +308,7 @@ function StaffPanel() {
         </h2>
         <p className="text-xs text-muted-foreground mt-1">
           {view === "join"
-            ? "Enter the invite code your company shared (e.g. EMP-AB12CD)."
+            ? "Enter the invite code your company shared — either the company-wide code or a personal one."
             : "Already created your account? Sign in below."}
         </p>
       </div>
@@ -404,7 +404,7 @@ function JoinForm({ onDone }: { onDone: () => void }) {
             <KeyRound className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
             <Input
               className="pl-9 font-mono tracking-wider uppercase"
-              placeholder="EMP-XXXXXX"
+              placeholder="TILL-XXXXXX or EMP-XXXXXX"
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
             />
