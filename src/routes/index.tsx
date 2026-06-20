@@ -38,6 +38,7 @@ import {
   Lock,
   MonitorPlay,
   WifiOff,
+  UserCircle,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
