@@ -90,6 +90,7 @@ import {
   resolveAlert,
 } from "@/lib/workforce.functions";
 import { CaptureSession } from "@/lib/capture";
+import { usePlan } from "@/lib/usePlan";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -154,76 +155,147 @@ function HomeGate() {
   return <AppShell role={primaryRole} />;
 }
 
-type Tab = "home" | "team" | "screens" | "payroll" | "reports";
+type Tab = "home" | "team" | "screens" | "payroll" | "reports" | "profile";
 
 function AppShell({ role }: { role: AppRole }) {
   const [tab, setTab] = useState<Tab>("home");
   const { profile, signOut, companyId } = useAuth();
   const navigate = useNavigate();
+  const plan = usePlan();
   const isAdmin = role !== "employee";
 
-  const tabs: { id: Tab; label: string; icon: React.ElementType; allow: AppRole[] }[] = (
-    [
-      { id: "home", label: "Home", icon: LayoutDashboard, allow: ["super_admin", "company_admin", "employee"] },
-      { id: "team", label: "Team", icon: Users, allow: ["super_admin", "company_admin"] },
-      { id: "screens", label: "Screens", icon: Camera, allow: ["super_admin", "company_admin", "employee"] },
-      { id: "payroll", label: "Payroll", icon: DollarSign, allow: ["super_admin", "company_admin", "employee"] },
-      { id: "reports", label: "Reports", icon: BarChart3, allow: ["super_admin", "company_admin"] },
-    ] as { id: Tab; label: string; icon: React.ElementType; allow: AppRole[] }[]
-  ).filter((t) => t.allow.includes(role));
+  const allTabs: { id: Tab; label: string; icon: React.ElementType; allow: AppRole[]; gate?: boolean }[] = [
+    { id: "home", label: "Home", icon: LayoutDashboard, allow: ["super_admin", "company_admin", "employee"] },
+    { id: "team", label: "Team", icon: Users, allow: ["super_admin", "company_admin"] },
+    { id: "screens", label: "Screens", icon: Camera, allow: ["super_admin", "company_admin", "employee"] },
+    { id: "payroll", label: "Payroll", icon: DollarSign, allow: ["super_admin", "company_admin", "employee"], gate: plan.payroll },
+    { id: "reports", label: "Reports", icon: BarChart3, allow: ["super_admin", "company_admin"], gate: plan.advancedReports },
+    { id: "profile", label: "Profile", icon: UserCircle, allow: ["super_admin", "company_admin", "employee"] },
+  ];
+  const tabs = allTabs.filter((t) => t.allow.includes(role) && (t.gate === undefined || t.gate));
+
+  function handleTab(id: Tab) {
+    if (id === "profile") {
+      navigate({ to: "/profile" });
+      return;
+    }
+    setTab(id);
+  }
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b">
-        <div className="max-w-screen-xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
-              <Briefcase className="w-4 h-4 text-primary-foreground" />
-            </div>
-            <div>
-              <div className="font-bold leading-none">TillTask</div>
-              <div className="text-xs text-muted-foreground capitalize">
-                {role.replace("_", " ")}
-              </div>
-            </div>
+    <div className="min-h-screen bg-background flex">
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:flex w-60 shrink-0 border-r bg-card flex-col sticky top-0 h-screen">
+        <div className="flex items-center gap-2 px-4 py-4 border-b">
+          <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
+            <Briefcase className="w-4 h-4 text-primary-foreground" />
           </div>
-          <div className="flex items-center gap-2">
-            {isAdmin && companyId && <AlertsBell companyId={companyId} />}
-            <div className="text-right hidden sm:block">
-              <div className="text-sm font-medium">{profile?.full_name ?? profile?.email}</div>
-              <div className="text-xs text-muted-foreground">{profile?.job_title ?? ""}</div>
-            </div>
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => navigate({ to: "/profile" })}
-              title="Profile"
-            >
-              <UserCircle className="w-5 h-5" />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={async () => {
-                await signOut();
-                navigate({ to: "/auth" });
-              }}
-            >
-              <LogOut className="w-4 h-4" />
-            </Button>
+          <div>
+            <div className="font-bold leading-none">TillTask</div>
+            <div className="text-xs text-muted-foreground capitalize">{role.replace("_", " ")}</div>
           </div>
         </div>
-      </header>
+        <nav className="flex-1 p-2 space-y-0.5">
+          {tabs.map((t) => {
+            const Icon = t.icon;
+            const active = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => handleTab(t.id)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {t.label}
+              </button>
+            );
+          })}
+          {isAdmin && (
+            <button
+              onClick={() => navigate({ to: "/pricing" })}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <DollarSign className="w-4 h-4" />
+              Pricing
+            </button>
+          )}
+        </nav>
+        <div className="p-2 border-t">
+          <div className="px-3 py-2 text-xs">
+            <div className="font-medium truncate">{profile?.full_name ?? profile?.email}</div>
+            <div className="text-muted-foreground truncate">{profile?.job_title ?? ""}</div>
+          </div>
+          <button
+            onClick={async () => {
+              await signOut();
+              navigate({ to: "/auth" });
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-muted"
+          >
+            <LogOut className="w-4 h-4" /> Sign out
+          </button>
+        </div>
+      </aside>
 
-      <main className="max-w-screen-xl mx-auto px-4 py-6">
-        {tab === "home" && <HomeTab role={role} />}
-        {tab === "team" && <TeamTab />}
-        {tab === "screens" && <ScreensTab role={role} />}
-        {tab === "payroll" && <PayrollTab role={role} />}
-        {tab === "reports" && <ReportsTab />}
-      </main>
+      <div className="flex-1 min-w-0 pb-24 lg:pb-0">
+        <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b lg:border-b">
+          <div className="max-w-screen-xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2 lg:hidden">
+              <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
+                <Briefcase className="w-4 h-4 text-primary-foreground" />
+              </div>
+              <div>
+                <div className="font-bold leading-none">TillTask</div>
+                <div className="text-xs text-muted-foreground capitalize">
+                  {role.replace("_", " ")}
+                </div>
+              </div>
+            </div>
+            <div className="hidden lg:block font-semibold capitalize">{tab}</div>
+            <div className="flex items-center gap-2">
+              {plan.readonly && (
+                <Badge variant="destructive" className="hidden sm:inline-flex text-[10px]">
+                  Trial ended — read-only
+                </Badge>
+              )}
+              {isAdmin && companyId && <AlertsBell companyId={companyId} />}
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => navigate({ to: "/profile" })}
+                title="Profile"
+                className="lg:hidden"
+              >
+                <UserCircle className="w-5 h-5" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="lg:hidden"
+                onClick={async () => {
+                  await signOut();
+                  navigate({ to: "/auth" });
+                }}
+              >
+                <LogOut className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </header>
 
-      <nav className="fixed bottom-0 inset-x-0 bg-card border-t z-10">
+        <main className="max-w-screen-xl mx-auto px-4 py-6">
+          {tab === "home" && <HomeTab role={role} />}
+          {tab === "team" && <TeamTab />}
+          {tab === "screens" && <ScreensTab role={role} />}
+          {tab === "payroll" && <PayrollTab role={role} />}
+          {tab === "reports" && <ReportsTab />}
+        </main>
+      </div>
+
+      {/* Mobile bottom nav */}
+      <nav className="fixed bottom-0 inset-x-0 bg-card border-t z-10 lg:hidden">
         <div className="max-w-screen-xl mx-auto grid" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0,1fr))` }}>
           {tabs.map((t) => {
             const Icon = t.icon;
@@ -231,7 +303,7 @@ function AppShell({ role }: { role: AppRole }) {
             return (
               <button
                 key={t.id}
-                onClick={() => setTab(t.id)}
+                onClick={() => handleTab(t.id)}
                 className={`flex flex-col items-center gap-1 py-3 text-xs ${
                   active ? "text-primary" : "text-muted-foreground"
                 }`}
