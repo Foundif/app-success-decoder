@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -7,7 +7,6 @@ import {
   LayoutDashboard,
   Users,
   Camera,
-  FolderKanban,
   BarChart3,
   LogOut,
   Loader2,
@@ -23,13 +22,22 @@ import {
   Shield,
   Copy,
   Briefcase,
-  ChevronRight,
   FileText,
   Filter,
   History,
   UserCheck,
   KeyRound,
   CameraIcon,
+  Bell,
+  DollarSign,
+  AlertTriangle,
+  Video,
+  Edit3,
+  Settings,
+  Calculator,
+  Lock,
+  MonitorPlay,
+  WifiOff,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -39,9 +47,19 @@ import {
   DialogTitle,
   DialogFooter,
   DialogDescription,
+  DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   BarChart,
   Bar,
@@ -61,6 +79,16 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth, type AppRole } from "@/lib/auth-context";
 import { supabase } from "@/integrations/supabase/client";
 import { reviewScreenshot } from "@/lib/screenshots.functions";
+import {
+  upsertAttendanceManual,
+  updateEmployeeCompensation,
+  calculateSalary,
+  overrideSalary,
+  finalizeSalary,
+  requestClip,
+  resolveAlert,
+} from "@/lib/workforce.functions";
+import { CaptureSession } from "@/lib/capture";
 
 export const Route = createFileRoute("/")({
   head: () => ({
