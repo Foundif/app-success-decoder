@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
@@ -444,18 +444,35 @@ function OnboardingPage() {
 }
 
 function Stepper({ step }: { step: Step }) {
+  const scrollerRef = useRef<HTMLOListElement | null>(null);
+  const itemRefs = useRef<Array<HTMLLIElement | null>>([]);
+
+  // Auto-scroll active step into view on mobile (horizontal scroller)
+  useEffect(() => {
+    const el = itemRefs.current[step - 1];
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }, [step]);
+
   return (
-    <aside className="lg:sticky lg:top-20 self-start">
-      <ol className="flex lg:flex-col gap-2 lg:gap-1 overflow-x-auto lg:overflow-visible">
-        {STEPS.map((s) => {
+    <aside className="lg:sticky lg:top-20 self-start -mx-4 lg:mx-0 lg:w-auto">
+      <ol
+        ref={scrollerRef}
+        className="flex lg:flex-col gap-2 lg:gap-1 overflow-x-auto lg:overflow-visible px-4 lg:px-0 snap-x snap-mandatory scrollbar-none"
+        style={{ scrollbarWidth: "none" }}
+      >
+        {STEPS.map((s, i) => {
           const Icon = s.icon;
           const done = step > s.id;
           const active = step === s.id;
           return (
             <li
               key={s.id}
-              className={`flex items-center gap-3 p-2.5 rounded-lg min-w-[160px] lg:min-w-0 ${
-                active ? "bg-primary/10" : ""
+              ref={(el) => {
+                itemRefs.current[i] = el;
+              }}
+              className={`shrink-0 snap-center flex items-center gap-3 p-2.5 rounded-lg w-[78vw] sm:w-[280px] lg:w-auto lg:min-w-0 transition-colors ${
+                active ? "bg-primary/10 border border-primary/20" : "border border-transparent"
               }`}
             >
               <div
@@ -469,11 +486,11 @@ function Stepper({ step }: { step: Step }) {
               >
                 {done ? <CheckCircle2 className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
               </div>
-              <div>
-                <div className={`text-sm font-medium ${active ? "" : "text-muted-foreground"}`}>
+              <div className="min-w-0">
+                <div className={`text-sm font-medium truncate ${active ? "" : "text-muted-foreground"}`}>
                   {s.title}
                 </div>
-                <div className="text-[11px] text-muted-foreground hidden lg:block">{s.sub}</div>
+                <div className="text-[11px] text-muted-foreground truncate">{s.sub}</div>
               </div>
             </li>
           );
