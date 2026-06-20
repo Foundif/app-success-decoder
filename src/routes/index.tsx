@@ -133,20 +133,20 @@ function HomeGate() {
   return <AppShell role={primaryRole} />;
 }
 
-type Tab = "home" | "team" | "screens" | "projects" | "reports";
+type Tab = "home" | "team" | "screens" | "payroll" | "reports";
 
 function AppShell({ role }: { role: AppRole }) {
   const [tab, setTab] = useState<Tab>("home");
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, companyId } = useAuth();
   const navigate = useNavigate();
+  const isAdmin = role !== "employee";
 
-  // employees only get home + screens (their own) + their projects
   const tabs: { id: Tab; label: string; icon: React.ElementType; allow: AppRole[] }[] = (
     [
       { id: "home", label: "Home", icon: LayoutDashboard, allow: ["super_admin", "company_admin", "employee"] },
       { id: "team", label: "Team", icon: Users, allow: ["super_admin", "company_admin"] },
       { id: "screens", label: "Screens", icon: Camera, allow: ["super_admin", "company_admin", "employee"] },
-      { id: "projects", label: "Projects", icon: FolderKanban, allow: ["super_admin", "company_admin", "employee"] },
+      { id: "payroll", label: "Payroll", icon: DollarSign, allow: ["super_admin", "company_admin", "employee"] },
       { id: "reports", label: "Reports", icon: BarChart3, allow: ["super_admin", "company_admin"] },
     ] as { id: Tab; label: string; icon: React.ElementType; allow: AppRole[] }[]
   ).filter((t) => t.allow.includes(role));
@@ -167,6 +167,7 @@ function AppShell({ role }: { role: AppRole }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {isAdmin && companyId && <AlertsBell companyId={companyId} />}
             <div className="text-right hidden sm:block">
               <div className="text-sm font-medium">{profile?.full_name ?? profile?.email}</div>
               <div className="text-xs text-muted-foreground">{profile?.job_title ?? ""}</div>
@@ -189,7 +190,7 @@ function AppShell({ role }: { role: AppRole }) {
         {tab === "home" && <HomeTab role={role} />}
         {tab === "team" && <TeamTab />}
         {tab === "screens" && <ScreensTab role={role} />}
-        {tab === "projects" && <ProjectsTab role={role} />}
+        {tab === "payroll" && <PayrollTab role={role} />}
         {tab === "reports" && <ReportsTab />}
       </main>
 
