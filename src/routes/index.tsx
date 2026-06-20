@@ -656,7 +656,8 @@ function TeamTab() {
           )}
         </div>
       </Card>
-    </div>
+      </TabsContent>
+    </Tabs>
   );
 }
 
