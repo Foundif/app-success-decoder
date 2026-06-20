@@ -498,6 +498,7 @@ function ProfilePage() {
         </DialogContent>
       </Dialog>
     </div>
+    </SecondaryShell>
   );
 }
 
