@@ -338,16 +338,29 @@ function AdminHome() {
 }
 
 function EmployeeHome() {
-  const { user, companyId, profile } = useAuth();
+  const { user, companyId } = useAuth();
+  const qc = useQueryClient();
   const [tracking, setTracking] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [onBreak, setOnBreak] = useState(false);
+  const [capturing, setCapturing] = useState(false);
+  const [captureError, setCaptureError] = useState<string | null>(null);
+  const sessionRef = useRef<CaptureSession | null>(null);
+  const [attendanceId, setAttendanceId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!tracking || onBreak) return;
     const id = setInterval(() => setSeconds((s) => s + 1), 1000);
     return () => clearInterval(id);
   }, [tracking, onBreak]);
+
+  // Cleanup capture on unmount
+  useEffect(() => {
+    return () => {
+      sessionRef.current?.stop();
+      sessionRef.current = null;
+    };
+  }, []);
 
   const { data: today } = useQuery({
     enabled: !!user,
@@ -364,23 +377,82 @@ function EmployeeHome() {
     },
   });
 
+  // Pending clip requests for this employee
+  const { data: pendingClipReq } = useQuery({
+    enabled: !!user,
+    queryKey: ["my-clip-reqs", user?.id],
+    refetchInterval: 15000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("clip_requests")
+        .select("id, reason, requested_by, created_at")
+        .eq("employee_id", user!.id)
+        .eq("status", "pending")
+        .gte("expires_at", new Date().toISOString());
+      return data ?? [];
+    },
+  });
+
+  async function startCapture(attId: string | null) {
+    if (!user || !companyId) return false;
+    if (sessionRef.current?.active) return true;
+    setCaptureError(null);
+    const sess = new CaptureSession({
+      userId: user.id,
+      companyId,
+      attendanceId: attId,
+      onAlert: (k, m) => {
+        if (k === "info") toast.success(m);
+        else toast.warning(m);
+      },
+      onStopped: () => {
+        setCapturing(false);
+        toast.error("Screen sharing stopped — your admin has been alerted");
+      },
+    });
+    try {
+      await sess.start();
+      sessionRef.current = sess;
+      setCapturing(true);
+      return true;
+    } catch (e) {
+      const msg = (e as Error).message;
+      setCaptureError(msg);
+      toast.error("Screen sharing denied or unsupported. Tracking will continue without recording.");
+      return false;
+    }
+  }
+
   async function clockAction(action: "in" | "out" | "break") {
     if (!user || !companyId) return;
     const date = new Date().toISOString().slice(0, 10);
     if (action === "in") {
-      await supabase
+      const { data: row, error } = await supabase
         .from("attendance")
-        .upsert({
-          user_id: user.id,
-          company_id: companyId,
-          work_date: date,
-          clock_in: new Date().toISOString(),
-          status: "present",
-          active_seconds: seconds,
-        });
+        .upsert(
+          {
+            user_id: user.id,
+            company_id: companyId,
+            work_date: date,
+            clock_in: new Date().toISOString(),
+            status: "present",
+            active_seconds: seconds,
+          },
+          { onConflict: "user_id,work_date" },
+        )
+        .select("id")
+        .single();
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      setAttendanceId(row.id);
       setTracking(true);
       setOnBreak(false);
       toast.success("Clocked in");
+      // start screen capture (browser will prompt for share permission)
+      await startCapture(row.id);
+      qc.invalidateQueries({ queryKey: ["my-attendance", user.id] });
     } else if (action === "out") {
       await supabase
         .from("attendance")
@@ -392,12 +464,17 @@ function EmployeeHome() {
         .eq("user_id", user.id)
         .eq("work_date", date);
       setTracking(false);
+      sessionRef.current?.stop();
+      sessionRef.current = null;
+      setCapturing(false);
       toast.success("Clocked out");
+      qc.invalidateQueries({ queryKey: ["my-attendance", user.id] });
     } else {
-      setOnBreak((b) => !b);
+      const nextOnBreak = !onBreak;
+      setOnBreak(nextOnBreak);
       await supabase
         .from("attendance")
-        .update({ status: onBreak ? "present" : "on_break" })
+        .update({ status: nextOnBreak ? "on_break" : "present" })
         .eq("user_id", user.id)
         .eq("work_date", date);
     }
@@ -411,13 +488,24 @@ function EmployeeHome() {
       <Card className="p-6 text-center bg-gradient-to-br from-primary/10 to-accent/40">
         <div className="text-xs uppercase font-semibold text-muted-foreground">Today</div>
         <div className="text-5xl font-bold font-mono my-3">{fmt(seconds)}</div>
-        <Badge variant={tracking ? "default" : "secondary"}>
-          {tracking ? (onBreak ? "On break" : "Tracking…") : "Idle"}
-        </Badge>
+        <div className="flex items-center justify-center gap-2 flex-wrap">
+          <Badge variant={tracking ? "default" : "secondary"}>
+            {tracking ? (onBreak ? "On break" : "Tracking…") : "Idle"}
+          </Badge>
+          {capturing ? (
+            <Badge variant="default" className="bg-success">
+              <MonitorPlay className="w-3 h-3" /> Recording
+            </Badge>
+          ) : tracking ? (
+            <Badge variant="destructive">
+              <WifiOff className="w-3 h-3" /> Not recording
+            </Badge>
+          ) : null}
+        </div>
         <div className="flex gap-2 mt-4 justify-center flex-wrap">
           {!tracking ? (
             <Button onClick={() => clockAction("in")}>
-              <Play className="w-4 h-4" /> Clock in
+              <Play className="w-4 h-4" /> Clock in & start recording
             </Button>
           ) : (
             <>
@@ -425,13 +513,39 @@ function EmployeeHome() {
                 {onBreak ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
                 {onBreak ? "Resume" : "Break"}
               </Button>
+              {!capturing && (
+                <Button variant="outline" onClick={() => startCapture(attendanceId)}>
+                  <MonitorPlay className="w-4 h-4" /> Resume recording
+                </Button>
+              )}
               <Button variant="destructive" onClick={() => clockAction("out")}>
                 <Square className="w-4 h-4" /> Clock out
               </Button>
             </>
           )}
         </div>
+        {captureError && (
+          <p className="text-[11px] text-destructive mt-3">{captureError}</p>
+        )}
+        <p className="text-[11px] text-muted-foreground mt-3 max-w-md mx-auto">
+          When you clock in, your browser will ask permission to share your screen. Snapshots
+          (~50 KB each) are taken every 10s. A short clip is uploaded only if your admin
+          requests one.
+        </p>
       </Card>
+
+      {pendingClipReq && pendingClipReq.length > 0 && capturing && (
+        <Card className="p-3 border-warning bg-warning/5 flex items-center gap-3">
+          <Video className="w-5 h-5 text-warning shrink-0" />
+          <div className="flex-1 text-sm">
+            <div className="font-medium">Your admin requested a clip</div>
+            <div className="text-xs text-muted-foreground">
+              {pendingClipReq[0].reason ?? "Reviewing recent activity"} — uploading shortly
+            </div>
+          </div>
+          <Loader2 className="w-4 h-4 animate-spin text-warning" />
+        </Card>
+      )}
 
       <div className="grid grid-cols-3 gap-3">
         <StatCard label="Active" value={fmt(today?.active_seconds ?? seconds)} icon={Activity} accent="success" small />
