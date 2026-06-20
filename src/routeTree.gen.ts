@@ -9,12 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicRazorpayWebhookRouteImport } from './routes/api/public/razorpay-webhook'
 
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PricingRoute = PricingRouteImport.update({
   id: '/pricing',
   path: '/pricing',
@@ -47,6 +53,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/onboarding': typeof OnboardingRoute
   '/pricing': typeof PricingRoute
+  '/profile': typeof ProfileRoute
   '/api/public/razorpay-webhook': typeof ApiPublicRazorpayWebhookRoute
 }
 export interface FileRoutesByTo {
@@ -54,6 +61,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/onboarding': typeof OnboardingRoute
   '/pricing': typeof PricingRoute
+  '/profile': typeof ProfileRoute
   '/api/public/razorpay-webhook': typeof ApiPublicRazorpayWebhookRoute
 }
 export interface FileRoutesById {
@@ -62,6 +70,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/onboarding': typeof OnboardingRoute
   '/pricing': typeof PricingRoute
+  '/profile': typeof ProfileRoute
   '/api/public/razorpay-webhook': typeof ApiPublicRazorpayWebhookRoute
 }
 export interface FileRouteTypes {
@@ -71,6 +80,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/onboarding'
     | '/pricing'
+    | '/profile'
     | '/api/public/razorpay-webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -78,6 +88,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/onboarding'
     | '/pricing'
+    | '/profile'
     | '/api/public/razorpay-webhook'
   id:
     | '__root__'
@@ -85,6 +96,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/onboarding'
     | '/pricing'
+    | '/profile'
     | '/api/public/razorpay-webhook'
   fileRoutesById: FileRoutesById
 }
@@ -93,11 +105,19 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   OnboardingRoute: typeof OnboardingRoute
   PricingRoute: typeof PricingRoute
+  ProfileRoute: typeof ProfileRoute
   ApiPublicRazorpayWebhookRoute: typeof ApiPublicRazorpayWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pricing': {
       id: '/pricing'
       path: '/pricing'
@@ -141,6 +161,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   OnboardingRoute: OnboardingRoute,
   PricingRoute: PricingRoute,
+  ProfileRoute: ProfileRoute,
   ApiPublicRazorpayWebhookRoute: ApiPublicRazorpayWebhookRoute,
 }
 export const routeTree = rootRouteImport
