@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthProvider } from "@/lib/auth-context";
 import { Toaster } from "@/components/ui/sonner";
+import { InstallPrompt } from "@/components/install-prompt";
 
 function NotFoundComponent() {
   return (
@@ -78,22 +79,27 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
+      { name: "theme-color", content: "#F97316" },
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "default" },
+      { name: "apple-mobile-web-app-title", content: "TillTask" },
+      { title: "TillTask — Workforce Productivity" },
       { name: "description", content: "TillTask is a SaaS platform for businesses to monitor remote employees, track hours, and boost accountability." },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "TillTask is a SaaS platform for businesses to monitor remote employees, track hours, and boost accountability." },
+      { name: "author", content: "TillTask" },
+      { property: "og:title", content: "TillTask — Workforce Productivity" },
+      { property: "og:description", content: "Track attendance, screen activity, payroll, and audit for your remote team." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
-      { name: "twitter:title", content: "Lovable App" },
-      { name: "twitter:description", content: "TillTask is a SaaS platform for businesses to monitor remote employees, track hours, and boost accountability." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/3ad0ae9e-84d7-4fda-a381-f97286e4a7ea/id-preview-ed14163a--352ff470-5a4e-4cde-b5d9-2521554ccfe5.lovable.app-1781605395500.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/3ad0ae9e-84d7-4fda-a381-f97286e4a7ea/id-preview-ed14163a--352ff470-5a4e-4cde-b5d9-2521554ccfe5.lovable.app-1781605395500.png" },
+      { name: "twitter:title", content: "TillTask — Workforce Productivity" },
+      { name: "twitter:description", content: "Track attendance, screen activity, payroll, and audit for your remote team." },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "apple-touch-icon", href: "/icon-192.png" },
+      { rel: "icon", href: "/icon-192.png", type: "image/png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" },
@@ -126,6 +132,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <Outlet />
+        <InstallPrompt />
         <Toaster richColors position="top-center" />
       </AuthProvider>
     </QueryClientProvider>
