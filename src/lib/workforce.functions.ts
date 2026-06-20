@@ -68,8 +68,7 @@ export const upsertAttendanceManual = createServerFn({ method: "POST" })
         | "present"
         | "on_break"
         | "clocked_out"
-        | "idle"
-        | "offline",
+        | "absent",
       is_manual: true,
       edited_by: context.userId,
       edit_reason: data.reason.trim(),
