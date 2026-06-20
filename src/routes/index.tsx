@@ -455,6 +455,15 @@ function EmployeeHome() {
     return () => clearInterval(id);
   }, [tracking, onBreak]);
 
+  // Persist active_seconds every 30s so reloading doesn't lose progress
+  useEffect(() => {
+    if (!tracking || !attendanceId) return;
+    const id = setInterval(() => {
+      supabase.from("attendance").update({ active_seconds: seconds }).eq("id", attendanceId);
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [tracking, attendanceId, seconds]);
+
   // Cleanup capture on unmount
   useEffect(() => {
     return () => {
@@ -477,6 +486,20 @@ function EmployeeHome() {
       return data;
     },
   });
+
+  // Restore in-progress clock-in on mount/navigation back
+  useEffect(() => {
+    if (!today || tracking) return;
+    if (today.clock_in && !today.clock_out) {
+      const base = today.active_seconds ?? 0;
+      const sinceClockIn = Math.max(0, Math.floor((Date.now() - new Date(today.clock_in).getTime()) / 1000));
+      setSeconds(Math.max(base, sinceClockIn));
+      setAttendanceId(today.id);
+      setTracking(true);
+      setOnBreak(today.status === "on_break");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [today]);
 
   // Pending clip requests for this employee
   const { data: pendingClipReq } = useQuery({
