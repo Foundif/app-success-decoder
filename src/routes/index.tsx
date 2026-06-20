@@ -175,6 +175,14 @@ function AppShell({ role }: { role: AppRole }) {
             <Button
               size="icon"
               variant="ghost"
+              onClick={() => navigate({ to: "/profile" })}
+              title="Profile"
+            >
+              <UserCircle className="w-5 h-5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
               onClick={async () => {
                 await signOut();
                 navigate({ to: "/auth" });
