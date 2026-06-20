@@ -589,29 +589,40 @@ function TeamTab() {
   });
 
   return (
-    <div className="space-y-5">
-      <Card className="p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold">Team members</h2>
-          <Badge variant="secondary">{members?.length ?? 0}</Badge>
-        </div>
-        <div className="space-y-2">
-          {members?.map((m) => (
-            <div key={m.id} className="flex items-center justify-between p-2 rounded hover:bg-muted">
-              <div>
-                <div className="font-medium">{m.full_name ?? "Unnamed"}</div>
-                <div className="text-xs text-muted-foreground">
-                  {m.job_title ?? "—"} · {m.email}
-                </div>
-              </div>
-              <Shield className="w-4 h-4 text-success" />
-            </div>
-          ))}
-          {(!members || members.length === 0) && (
-            <p className="text-sm text-muted-foreground">No team members yet.</p>
-          )}
-        </div>
-      </Card>
+    <Tabs defaultValue="members" className="space-y-5">
+      <TabsList className="w-full justify-start overflow-x-auto h-auto p-1">
+        <TabsTrigger value="members"><Users className="w-3.5 h-3.5" /> Members</TabsTrigger>
+        <TabsTrigger value="attendance"><Clock className="w-3.5 h-3.5" /> Attendance</TabsTrigger>
+        <TabsTrigger value="clips"><Video className="w-3.5 h-3.5" /> Clips</TabsTrigger>
+        <TabsTrigger value="invites"><KeyRound className="w-3.5 h-3.5" /> Invites</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="members" className="space-y-5">
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold">Team members</h2>
+            <Badge variant="secondary">{members?.length ?? 0}</Badge>
+          </div>
+          <div className="space-y-2">
+            {members?.map((m) => (
+              <TeamMemberRow key={m.id} member={m} companyId={companyId!} />
+            ))}
+            {(!members || members.length === 0) && (
+              <p className="text-sm text-muted-foreground">No team members yet.</p>
+            )}
+          </div>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="attendance">
+        <AttendanceManager />
+      </TabsContent>
+
+      <TabsContent value="clips">
+        <ClipsPanel scope="admin" />
+      </TabsContent>
+
+      <TabsContent value="invites" className="space-y-5">
 
       <Card className="p-4">
         <h2 className="font-semibold mb-3">Invite codes</h2>
