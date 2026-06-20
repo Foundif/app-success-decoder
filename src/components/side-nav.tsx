@@ -2,13 +2,9 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   Briefcase,
   LayoutDashboard,
-  Users,
-  Camera,
   DollarSign,
-  BarChart3,
   UserCircle,
   LogOut,
-  Home,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useAuth } from "@/lib/auth-context";
