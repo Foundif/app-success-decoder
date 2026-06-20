@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -7,7 +7,6 @@ import {
   LayoutDashboard,
   Users,
   Camera,
-  FolderKanban,
   BarChart3,
   LogOut,
   Loader2,
@@ -23,13 +22,22 @@ import {
   Shield,
   Copy,
   Briefcase,
-  ChevronRight,
   FileText,
   Filter,
   History,
   UserCheck,
   KeyRound,
   CameraIcon,
+  Bell,
+  DollarSign,
+  AlertTriangle,
+  Video,
+  Edit3,
+  Settings,
+  Calculator,
+  Lock,
+  MonitorPlay,
+  WifiOff,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -39,9 +47,19 @@ import {
   DialogTitle,
   DialogFooter,
   DialogDescription,
+  DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   BarChart,
   Bar,
@@ -61,6 +79,16 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth, type AppRole } from "@/lib/auth-context";
 import { supabase } from "@/integrations/supabase/client";
 import { reviewScreenshot } from "@/lib/screenshots.functions";
+import {
+  upsertAttendanceManual,
+  updateEmployeeCompensation,
+  calculateSalary,
+  overrideSalary,
+  finalizeSalary,
+  requestClip,
+  resolveAlert,
+} from "@/lib/workforce.functions";
+import { CaptureSession } from "@/lib/capture";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -105,20 +133,20 @@ function HomeGate() {
   return <AppShell role={primaryRole} />;
 }
 
-type Tab = "home" | "team" | "screens" | "projects" | "reports";
+type Tab = "home" | "team" | "screens" | "payroll" | "reports";
 
 function AppShell({ role }: { role: AppRole }) {
   const [tab, setTab] = useState<Tab>("home");
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, companyId } = useAuth();
   const navigate = useNavigate();
+  const isAdmin = role !== "employee";
 
-  // employees only get home + screens (their own) + their projects
   const tabs: { id: Tab; label: string; icon: React.ElementType; allow: AppRole[] }[] = (
     [
       { id: "home", label: "Home", icon: LayoutDashboard, allow: ["super_admin", "company_admin", "employee"] },
       { id: "team", label: "Team", icon: Users, allow: ["super_admin", "company_admin"] },
       { id: "screens", label: "Screens", icon: Camera, allow: ["super_admin", "company_admin", "employee"] },
-      { id: "projects", label: "Projects", icon: FolderKanban, allow: ["super_admin", "company_admin", "employee"] },
+      { id: "payroll", label: "Payroll", icon: DollarSign, allow: ["super_admin", "company_admin", "employee"] },
       { id: "reports", label: "Reports", icon: BarChart3, allow: ["super_admin", "company_admin"] },
     ] as { id: Tab; label: string; icon: React.ElementType; allow: AppRole[] }[]
   ).filter((t) => t.allow.includes(role));
@@ -139,6 +167,7 @@ function AppShell({ role }: { role: AppRole }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {isAdmin && companyId && <AlertsBell companyId={companyId} />}
             <div className="text-right hidden sm:block">
               <div className="text-sm font-medium">{profile?.full_name ?? profile?.email}</div>
               <div className="text-xs text-muted-foreground">{profile?.job_title ?? ""}</div>
@@ -161,7 +190,7 @@ function AppShell({ role }: { role: AppRole }) {
         {tab === "home" && <HomeTab role={role} />}
         {tab === "team" && <TeamTab />}
         {tab === "screens" && <ScreensTab role={role} />}
-        {tab === "projects" && <ProjectsTab role={role} />}
+        {tab === "payroll" && <PayrollTab role={role} />}
         {tab === "reports" && <ReportsTab />}
       </main>
 
@@ -309,16 +338,29 @@ function AdminHome() {
 }
 
 function EmployeeHome() {
-  const { user, companyId, profile } = useAuth();
+  const { user, companyId } = useAuth();
+  const qc = useQueryClient();
   const [tracking, setTracking] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [onBreak, setOnBreak] = useState(false);
+  const [capturing, setCapturing] = useState(false);
+  const [captureError, setCaptureError] = useState<string | null>(null);
+  const sessionRef = useRef<CaptureSession | null>(null);
+  const [attendanceId, setAttendanceId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!tracking || onBreak) return;
     const id = setInterval(() => setSeconds((s) => s + 1), 1000);
     return () => clearInterval(id);
   }, [tracking, onBreak]);
+
+  // Cleanup capture on unmount
+  useEffect(() => {
+    return () => {
+      sessionRef.current?.stop();
+      sessionRef.current = null;
+    };
+  }, []);
 
   const { data: today } = useQuery({
     enabled: !!user,
@@ -335,23 +377,82 @@ function EmployeeHome() {
     },
   });
 
+  // Pending clip requests for this employee
+  const { data: pendingClipReq } = useQuery({
+    enabled: !!user,
+    queryKey: ["my-clip-reqs", user?.id],
+    refetchInterval: 15000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("clip_requests")
+        .select("id, reason, requested_by, created_at")
+        .eq("employee_id", user!.id)
+        .eq("status", "pending")
+        .gte("expires_at", new Date().toISOString());
+      return data ?? [];
+    },
+  });
+
+  async function startCapture(attId: string | null) {
+    if (!user || !companyId) return false;
+    if (sessionRef.current?.active) return true;
+    setCaptureError(null);
+    const sess = new CaptureSession({
+      userId: user.id,
+      companyId,
+      attendanceId: attId,
+      onAlert: (k, m) => {
+        if (k === "info") toast.success(m);
+        else toast.warning(m);
+      },
+      onStopped: () => {
+        setCapturing(false);
+        toast.error("Screen sharing stopped — your admin has been alerted");
+      },
+    });
+    try {
+      await sess.start();
+      sessionRef.current = sess;
+      setCapturing(true);
+      return true;
+    } catch (e) {
+      const msg = (e as Error).message;
+      setCaptureError(msg);
+      toast.error("Screen sharing denied or unsupported. Tracking will continue without recording.");
+      return false;
+    }
+  }
+
   async function clockAction(action: "in" | "out" | "break") {
     if (!user || !companyId) return;
     const date = new Date().toISOString().slice(0, 10);
     if (action === "in") {
-      await supabase
+      const { data: row, error } = await supabase
         .from("attendance")
-        .upsert({
-          user_id: user.id,
-          company_id: companyId,
-          work_date: date,
-          clock_in: new Date().toISOString(),
-          status: "present",
-          active_seconds: seconds,
-        });
+        .upsert(
+          {
+            user_id: user.id,
+            company_id: companyId,
+            work_date: date,
+            clock_in: new Date().toISOString(),
+            status: "present",
+            active_seconds: seconds,
+          },
+          { onConflict: "user_id,work_date" },
+        )
+        .select("id")
+        .single();
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      setAttendanceId(row.id);
       setTracking(true);
       setOnBreak(false);
       toast.success("Clocked in");
+      // start screen capture (browser will prompt for share permission)
+      await startCapture(row.id);
+      qc.invalidateQueries({ queryKey: ["my-attendance", user.id] });
     } else if (action === "out") {
       await supabase
         .from("attendance")
@@ -363,12 +464,17 @@ function EmployeeHome() {
         .eq("user_id", user.id)
         .eq("work_date", date);
       setTracking(false);
+      sessionRef.current?.stop();
+      sessionRef.current = null;
+      setCapturing(false);
       toast.success("Clocked out");
+      qc.invalidateQueries({ queryKey: ["my-attendance", user.id] });
     } else {
-      setOnBreak((b) => !b);
+      const nextOnBreak = !onBreak;
+      setOnBreak(nextOnBreak);
       await supabase
         .from("attendance")
-        .update({ status: onBreak ? "present" : "on_break" })
+        .update({ status: nextOnBreak ? "on_break" : "present" })
         .eq("user_id", user.id)
         .eq("work_date", date);
     }
@@ -382,13 +488,24 @@ function EmployeeHome() {
       <Card className="p-6 text-center bg-gradient-to-br from-primary/10 to-accent/40">
         <div className="text-xs uppercase font-semibold text-muted-foreground">Today</div>
         <div className="text-5xl font-bold font-mono my-3">{fmt(seconds)}</div>
-        <Badge variant={tracking ? "default" : "secondary"}>
-          {tracking ? (onBreak ? "On break" : "Tracking…") : "Idle"}
-        </Badge>
+        <div className="flex items-center justify-center gap-2 flex-wrap">
+          <Badge variant={tracking ? "default" : "secondary"}>
+            {tracking ? (onBreak ? "On break" : "Tracking…") : "Idle"}
+          </Badge>
+          {capturing ? (
+            <Badge variant="default" className="bg-success">
+              <MonitorPlay className="w-3 h-3" /> Recording
+            </Badge>
+          ) : tracking ? (
+            <Badge variant="destructive">
+              <WifiOff className="w-3 h-3" /> Not recording
+            </Badge>
+          ) : null}
+        </div>
         <div className="flex gap-2 mt-4 justify-center flex-wrap">
           {!tracking ? (
             <Button onClick={() => clockAction("in")}>
-              <Play className="w-4 h-4" /> Clock in
+              <Play className="w-4 h-4" /> Clock in & start recording
             </Button>
           ) : (
             <>
@@ -396,13 +513,39 @@ function EmployeeHome() {
                 {onBreak ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
                 {onBreak ? "Resume" : "Break"}
               </Button>
+              {!capturing && (
+                <Button variant="outline" onClick={() => startCapture(attendanceId)}>
+                  <MonitorPlay className="w-4 h-4" /> Resume recording
+                </Button>
+              )}
               <Button variant="destructive" onClick={() => clockAction("out")}>
                 <Square className="w-4 h-4" /> Clock out
               </Button>
             </>
           )}
         </div>
+        {captureError && (
+          <p className="text-[11px] text-destructive mt-3">{captureError}</p>
+        )}
+        <p className="text-[11px] text-muted-foreground mt-3 max-w-md mx-auto">
+          When you clock in, your browser will ask permission to share your screen. Snapshots
+          (~50 KB each) are taken every 10s. A short clip is uploaded only if your admin
+          requests one.
+        </p>
       </Card>
+
+      {pendingClipReq && pendingClipReq.length > 0 && capturing && (
+        <Card className="p-3 border-warning bg-warning/5 flex items-center gap-3">
+          <Video className="w-5 h-5 text-warning shrink-0" />
+          <div className="flex-1 text-sm">
+            <div className="font-medium">Your admin requested a clip</div>
+            <div className="text-xs text-muted-foreground">
+              {pendingClipReq[0].reason ?? "Reviewing recent activity"} — uploading shortly
+            </div>
+          </div>
+          <Loader2 className="w-4 h-4 animate-spin text-warning" />
+        </Card>
+      )}
 
       <div className="grid grid-cols-3 gap-3">
         <StatCard label="Active" value={fmt(today?.active_seconds ?? seconds)} icon={Activity} accent="success" small />
@@ -446,29 +589,40 @@ function TeamTab() {
   });
 
   return (
-    <div className="space-y-5">
-      <Card className="p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold">Team members</h2>
-          <Badge variant="secondary">{members?.length ?? 0}</Badge>
-        </div>
-        <div className="space-y-2">
-          {members?.map((m) => (
-            <div key={m.id} className="flex items-center justify-between p-2 rounded hover:bg-muted">
-              <div>
-                <div className="font-medium">{m.full_name ?? "Unnamed"}</div>
-                <div className="text-xs text-muted-foreground">
-                  {m.job_title ?? "—"} · {m.email}
-                </div>
-              </div>
-              <Shield className="w-4 h-4 text-success" />
-            </div>
-          ))}
-          {(!members || members.length === 0) && (
-            <p className="text-sm text-muted-foreground">No team members yet.</p>
-          )}
-        </div>
-      </Card>
+    <Tabs defaultValue="members" className="space-y-5">
+      <TabsList className="w-full justify-start overflow-x-auto h-auto p-1">
+        <TabsTrigger value="members"><Users className="w-3.5 h-3.5" /> Members</TabsTrigger>
+        <TabsTrigger value="attendance"><Clock className="w-3.5 h-3.5" /> Attendance</TabsTrigger>
+        <TabsTrigger value="clips"><Video className="w-3.5 h-3.5" /> Clips</TabsTrigger>
+        <TabsTrigger value="invites"><KeyRound className="w-3.5 h-3.5" /> Invites</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="members" className="space-y-5">
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold">Team members</h2>
+            <Badge variant="secondary">{members?.length ?? 0}</Badge>
+          </div>
+          <div className="space-y-2">
+            {members?.map((m) => (
+              <TeamMemberRow key={m.id} member={m} companyId={companyId!} />
+            ))}
+            {(!members || members.length === 0) && (
+              <p className="text-sm text-muted-foreground">No team members yet.</p>
+            )}
+          </div>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="attendance">
+        <AttendanceManager />
+      </TabsContent>
+
+      <TabsContent value="clips">
+        <ClipsPanel scope="admin" />
+      </TabsContent>
+
+      <TabsContent value="invites" className="space-y-5">
 
       <Card className="p-4">
         <h2 className="font-semibold mb-3">Invite codes</h2>
@@ -502,7 +656,8 @@ function TeamTab() {
           )}
         </div>
       </Card>
-    </div>
+      </TabsContent>
+    </Tabs>
   );
 }
 
@@ -1464,3 +1619,941 @@ function Metric({ label, value, pct, color }: { label: string; value: string; pc
     </div>
   );
 }
+
+// =================== ALERTS BELL (admin header) ===================
+function AlertsBell({ companyId }: { companyId: string }) {
+  const qc = useQueryClient();
+  const resolveFn = useServerFn(resolveAlert);
+  const { data: alerts } = useQuery({
+    queryKey: ["alerts", companyId],
+    refetchInterval: 10000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("activity_alerts")
+        .select("id, employee_id, alert_type, severity, message, created_at, resolved")
+        .eq("company_id", companyId)
+        .eq("resolved", false)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      return data ?? [];
+    },
+  });
+  const { data: profiles } = useQuery({
+    queryKey: ["alerts-profiles", companyId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .eq("company_id", companyId);
+      return data ?? [];
+    },
+  });
+  const nameMap = useMemo(() => {
+    const m = new Map<string, string>();
+    (profiles ?? []).forEach((p) => m.set(p.id, p.full_name ?? p.email ?? "—"));
+    return m;
+  }, [profiles]);
+  const count = alerts?.length ?? 0;
+  const critical = (alerts ?? []).some((a) => a.severity === "critical");
+
+  return (
+    <Sheet>
+      <SheetTrigger asChild>
+        <Button size="icon" variant="ghost" className="relative">
+          <Bell className={`w-4 h-4 ${critical ? "text-destructive" : ""}`} />
+          {count > 0 && (
+            <span
+              className={`absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center text-white ${critical ? "bg-destructive" : "bg-warning"}`}
+            >
+              {count > 9 ? "9+" : count}
+            </span>
+          )}
+        </Button>
+      </SheetTrigger>
+      <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-2">
+            <Bell className="w-4 h-4" /> Live alerts
+          </SheetTitle>
+          <SheetDescription>
+            Real-time warnings from employee devices. Tap "Resolve" once handled.
+          </SheetDescription>
+        </SheetHeader>
+        <div className="mt-4 space-y-2">
+          {(!alerts || alerts.length === 0) && (
+            <div className="text-center py-12">
+              <CheckCircle2 className="w-8 h-8 text-success/60 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">All clear — no active alerts.</p>
+            </div>
+          )}
+          {alerts?.map((a) => {
+            const meta = alertMeta(a.alert_type);
+            const Icon = meta.icon;
+            return (
+              <Card key={a.id} className="p-3 flex items-start gap-3">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${meta.bg} ${meta.fg}`}>
+                  <Icon className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{nameMap.get(a.employee_id) ?? "Employee"}</div>
+                  <div className="text-xs text-muted-foreground">{a.message ?? meta.label}</div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5">
+                    {new Date(a.created_at).toLocaleString()}
+                  </div>
+                  <div className="flex gap-1 mt-2">
+                    <Badge variant={a.severity === "critical" ? "destructive" : "secondary"} className="text-[10px]">
+                      {a.severity}
+                    </Badge>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 text-[11px] ml-auto"
+                      onClick={async () => {
+                        await resolveFn({ data: { alertId: a.id, companyId } });
+                        qc.invalidateQueries({ queryKey: ["alerts", companyId] });
+                      }}
+                    >
+                      Resolve
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function alertMeta(type: string) {
+  if (type === "capture_stopped")
+    return { icon: MonitorPlay, bg: "bg-destructive/15", fg: "text-destructive", label: "Screen sharing stopped" };
+  if (type === "offline")
+    return { icon: WifiOff, bg: "bg-destructive/15", fg: "text-destructive", label: "Device offline" };
+  if (type === "tab_hidden")
+    return { icon: AlertTriangle, bg: "bg-warning/15", fg: "text-warning", label: "Tab hidden" };
+  if (type === "idle")
+    return { icon: Clock, bg: "bg-warning/15", fg: "text-warning", label: "Idle" };
+  return { icon: AlertTriangle, bg: "bg-muted", fg: "text-foreground", label: "Alert" };
+}
+
+// =================== TEAM MEMBER ROW (admin) ===================
+function TeamMemberRow({
+  member,
+  companyId,
+}: {
+  member: { id: string; full_name: string | null; email: string | null; job_title: string | null };
+  companyId: string;
+}) {
+  const [compOpen, setCompOpen] = useState(false);
+  const [clipOpen, setClipOpen] = useState(false);
+  const reqClipFn = useServerFn(requestClip);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function sendClipRequest() {
+    setBusy(true);
+    try {
+      await reqClipFn({
+        data: { companyId, employeeId: member.id, reason: reason || undefined, durationSeconds: 300 },
+      });
+      toast.success("Clip request sent — employee's browser will upload shortly");
+      setClipOpen(false);
+      setReason("");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-between p-2 rounded hover:bg-muted gap-2">
+      <div className="flex-1 min-w-0">
+        <div className="font-medium truncate">{member.full_name ?? "Unnamed"}</div>
+        <div className="text-xs text-muted-foreground truncate">
+          {member.job_title ?? "—"} · {member.email}
+        </div>
+      </div>
+      <Button size="sm" variant="ghost" onClick={() => setClipOpen(true)} title="Request clip">
+        <Video className="w-4 h-4" />
+      </Button>
+      <Button size="sm" variant="ghost" onClick={() => setCompOpen(true)} title="Edit salary & hours">
+        <Settings className="w-4 h-4" />
+      </Button>
+
+      <Dialog open={clipOpen} onOpenChange={setClipOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request screen clip</DialogTitle>
+            <DialogDescription>
+              {member.full_name ?? member.email}'s browser will upload the last 5 minutes of
+              recorded screen activity. The employee must be currently clocked in and recording.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            placeholder="Reason (optional) — e.g. 'Need to verify task X progress'"
+            rows={3}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setClipOpen(false)}>Cancel</Button>
+            <Button onClick={sendClipRequest} disabled={busy}>
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send request"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <CompensationDialog
+        open={compOpen}
+        onOpenChange={setCompOpen}
+        member={member}
+        companyId={companyId}
+      />
+    </div>
+  );
+}
+
+// =================== COMPENSATION DIALOG ===================
+function CompensationDialog({
+  open,
+  onOpenChange,
+  member,
+  companyId,
+}: {
+  open: boolean;
+  onOpenChange: (b: boolean) => void;
+  member: { id: string; full_name: string | null; email: string | null };
+  companyId: string;
+}) {
+  const qc = useQueryClient();
+  const updateFn = useServerFn(updateEmployeeCompensation);
+  const { data: current } = useQuery({
+    enabled: open,
+    queryKey: ["comp", member.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("monthly_salary, expected_monthly_hours, currency, hourly_overtime_rate")
+        .eq("id", member.id)
+        .maybeSingle();
+      return data;
+    },
+  });
+  const [salary, setSalary] = useState("0");
+  const [hours, setHours] = useState("160");
+  const [currency, setCurrency] = useState("USD");
+  const [otRate, setOtRate] = useState("0");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (current) {
+      setSalary(String(current.monthly_salary ?? 0));
+      setHours(String(current.expected_monthly_hours ?? 160));
+      setCurrency(current.currency ?? "USD");
+      setOtRate(String(current.hourly_overtime_rate ?? 0));
+    }
+  }, [current]);
+
+  async function save() {
+    setBusy(true);
+    try {
+      await updateFn({
+        data: {
+          employeeId: member.id,
+          companyId,
+          monthlySalary: Number(salary) || 0,
+          expectedMonthlyHours: Number(hours) || 160,
+          currency,
+          hourlyOvertimeRate: Number(otRate) || 0,
+        },
+      });
+      toast.success("Compensation updated");
+      qc.invalidateQueries({ queryKey: ["comp", member.id] });
+      onOpenChange(false);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Compensation · {member.full_name ?? member.email}</DialogTitle>
+          <DialogDescription>
+            Salary is prorated by worked hours vs expected hours each month. Overtime hours past
+            the expected count are paid at the overtime rate.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Monthly salary</Label>
+            <Input type="number" value={salary} onChange={(e) => setSalary(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Expected hours / month</Label>
+            <Input type="number" value={hours} onChange={(e) => setHours(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Currency</Label>
+            <Input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} maxLength={3} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Overtime rate / hour</Label>
+            <Input type="number" value={otRate} onChange={(e) => setOtRate(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={save} disabled={busy}>
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// =================== ATTENDANCE MANAGER (admin) ===================
+function AttendanceManager() {
+  const { companyId } = useAuth();
+  const qc = useQueryClient();
+  const today = new Date().toISOString().slice(0, 10);
+  const weekAgo = new Date(Date.now() - 13 * 86400000).toISOString().slice(0, 10);
+  const [from, setFrom] = useState(weekAgo);
+  const [to, setTo] = useState(today);
+  const [employeeId, setEmployeeId] = useState<string>("all");
+  const [editing, setEditing] = useState<any | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  const { data: members } = useQuery({
+    enabled: !!companyId,
+    queryKey: ["att-members", companyId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .eq("company_id", companyId!);
+      return data ?? [];
+    },
+  });
+
+  const { data: rows } = useQuery({
+    enabled: !!companyId,
+    queryKey: ["att-list", companyId, from, to, employeeId],
+    queryFn: async () => {
+      let q = supabase
+        .from("attendance")
+        .select("id, user_id, work_date, clock_in, clock_out, active_seconds, idle_seconds, break_seconds, status, is_manual, edited_by, edit_reason, edited_at")
+        .eq("company_id", companyId!)
+        .gte("work_date", from)
+        .lte("work_date", to)
+        .order("work_date", { ascending: false })
+        .limit(300);
+      if (employeeId !== "all") q = q.eq("user_id", employeeId);
+      const { data } = await q;
+      return data ?? [];
+    },
+  });
+
+  const nameMap = useMemo(() => {
+    const m = new Map<string, string>();
+    (members ?? []).forEach((p) => m.set(p.id, p.full_name ?? p.email ?? "—"));
+    return m;
+  }, [members]);
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-4">
+        <div className="grid sm:grid-cols-4 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Employee</Label>
+            <select
+              value={employeeId}
+              onChange={(e) => setEmployeeId(e.target.value)}
+              className="w-full h-9 rounded-md border bg-transparent px-3 text-sm"
+            >
+              <option value="all">All employees</option>
+              {members?.map((m) => (
+                <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">From</Label>
+            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">To</Label>
+            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+          <div className="flex items-end">
+            <Button className="w-full" onClick={() => setCreating(true)}>
+              <Edit3 className="w-4 h-4" /> Manual entry
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-0 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-xs">
+              <tr>
+                <th className="text-left p-2">Date</th>
+                <th className="text-left p-2">Employee</th>
+                <th className="text-left p-2">In</th>
+                <th className="text-left p-2">Out</th>
+                <th className="text-left p-2">Worked</th>
+                <th className="text-left p-2">Status</th>
+                <th className="text-right p-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows?.map((r) => (
+                <tr key={r.id} className="border-t">
+                  <td className="p-2">{r.work_date}</td>
+                  <td className="p-2 truncate max-w-[160px]">{nameMap.get(r.user_id)}</td>
+                  <td className="p-2 text-xs font-mono">{r.clock_in ? new Date(r.clock_in).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</td>
+                  <td className="p-2 text-xs font-mono">{r.clock_out ? new Date(r.clock_out).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</td>
+                  <td className="p-2 font-mono text-xs">{((r.active_seconds ?? 0) / 3600).toFixed(2)}h</td>
+                  <td className="p-2">
+                    <div className="flex items-center gap-1">
+                      <Badge variant="secondary" className="text-[10px]">{r.status}</Badge>
+                      {r.is_manual && (
+                        <Badge variant="outline" className="text-[10px]">
+                          <Edit3 className="w-2.5 h-2.5" /> manual
+                        </Badge>
+                      )}
+                    </div>
+                  </td>
+                  <td className="p-2 text-right">
+                    <Button size="sm" variant="ghost" onClick={() => setEditing(r)}>
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+              {(!rows || rows.length === 0) && (
+                <tr>
+                  <td colSpan={7} className="text-center text-muted-foreground p-8 text-sm">
+                    No attendance entries in this range.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <AttendanceEditDialog
+        open={!!editing || creating}
+        editing={editing}
+        members={members ?? []}
+        companyId={companyId!}
+        onClose={() => {
+          setEditing(null);
+          setCreating(false);
+          qc.invalidateQueries({ queryKey: ["att-list", companyId] });
+        }}
+      />
+    </div>
+  );
+}
+
+function AttendanceEditDialog({
+  open,
+  editing,
+  members,
+  companyId,
+  onClose,
+}: {
+  open: boolean;
+  editing: any | null;
+  members: { id: string; full_name: string | null; email: string | null }[];
+  companyId: string;
+  onClose: () => void;
+}) {
+  const upsertFn = useServerFn(upsertAttendanceManual);
+  const [empId, setEmpId] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [clockIn, setClockIn] = useState("");
+  const [clockOut, setClockOut] = useState("");
+  const [activeMin, setActiveMin] = useState("0");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (editing) {
+      setEmpId(editing.user_id);
+      setDate(editing.work_date);
+      setClockIn(editing.clock_in ? toLocalDT(editing.clock_in) : "");
+      setClockOut(editing.clock_out ? toLocalDT(editing.clock_out) : "");
+      setActiveMin(String(Math.round((editing.active_seconds ?? 0) / 60)));
+      setReason("");
+    } else {
+      setEmpId(members[0]?.id ?? "");
+      setDate(new Date().toISOString().slice(0, 10));
+      setClockIn("");
+      setClockOut("");
+      setActiveMin("0");
+      setReason("");
+    }
+  }, [editing, open]);
+
+  async function save() {
+    if (!empId || !reason.trim()) {
+      toast.error("Employee and reason are required");
+      return;
+    }
+    setBusy(true);
+    try {
+      await upsertFn({
+        data: {
+          employeeId: empId,
+          companyId,
+          workDate: date,
+          clockIn: clockIn ? new Date(clockIn).toISOString() : null,
+          clockOut: clockOut ? new Date(clockOut).toISOString() : null,
+          activeSeconds: Math.round(Number(activeMin) * 60),
+          reason: reason.trim(),
+          status: clockOut ? "clocked_out" : "present",
+        },
+      });
+      toast.success(editing ? "Entry updated" : "Manual entry created");
+      onClose();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{editing ? "Edit attendance" : "Manual attendance entry"}</DialogTitle>
+          <DialogDescription>
+            All edits are recorded in the audit log with the reason you provide.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5 col-span-2">
+            <Label className="text-xs">Employee</Label>
+            <select
+              value={empId}
+              disabled={!!editing}
+              onChange={(e) => setEmpId(e.target.value)}
+              className="w-full h-9 rounded-md border bg-transparent px-3 text-sm"
+            >
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Date</Label>
+            <Input type="date" value={date} disabled={!!editing} onChange={(e) => setDate(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Active minutes</Label>
+            <Input type="number" value={activeMin} onChange={(e) => setActiveMin(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Clock in</Label>
+            <Input type="datetime-local" value={clockIn} onChange={(e) => setClockIn(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Clock out</Label>
+            <Input type="datetime-local" value={clockOut} onChange={(e) => setClockOut(e.target.value)} />
+          </div>
+          <div className="space-y-1.5 col-span-2">
+            <Label className="text-xs">Reason (required)</Label>
+            <Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Forgot to clock out; correcting based on Slack handover at 6 PM" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={save} disabled={busy}>
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function toLocalDT(iso: string) {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// =================== CLIPS PANEL ===================
+function ClipsPanel({ scope }: { scope: "admin" | "employee" }) {
+  const { companyId, user } = useAuth();
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+
+  const { data: clips } = useQuery({
+    enabled: !!(scope === "admin" ? companyId : user),
+    queryKey: ["clips", scope, companyId, user?.id],
+    queryFn: async () => {
+      let q = supabase
+        .from("recording_clips")
+        .select("id, employee_id, storage_path, duration_seconds, size_bytes, captured_at, notes")
+        .order("captured_at", { ascending: false })
+        .limit(50);
+      q = scope === "admin" ? q.eq("company_id", companyId!) : q.eq("employee_id", user!.id);
+      const { data } = await q;
+      return data ?? [];
+    },
+  });
+
+  const { data: members } = useQuery({
+    enabled: scope === "admin" && !!companyId,
+    queryKey: ["clip-members", companyId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .eq("company_id", companyId!);
+      return data ?? [];
+    },
+  });
+
+  useEffect(() => {
+    (async () => {
+      if (!clips) return;
+      const next: Record<string, string> = { ...signedUrls };
+      let updated = false;
+      for (const c of clips) {
+        if (next[c.id]) continue;
+        const { data } = await supabase.storage
+          .from("recordings")
+          .createSignedUrl(c.storage_path, 3600);
+        if (data?.signedUrl) {
+          next[c.id] = data.signedUrl;
+          updated = true;
+        }
+      }
+      if (updated) setSignedUrls(next);
+    })();
+  }, [clips]);
+
+  const nameMap = useMemo(() => {
+    const m = new Map<string, string>();
+    (members ?? []).forEach((p) => m.set(p.id, p.full_name ?? p.email ?? "—"));
+    return m;
+  }, [members]);
+
+  return (
+    <div className="space-y-3">
+      <div className="text-xs text-muted-foreground">
+        {scope === "admin"
+          ? "Short on-demand recordings requested from employees. Stored at ~150 kbps (1 MB per minute)."
+          : "Clips you've sent to your admin after their requests."}
+      </div>
+      {(!clips || clips.length === 0) && (
+        <Card className="p-10 text-center">
+          <Video className="w-8 h-8 text-muted-foreground/60 mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">No clips yet.</p>
+        </Card>
+      )}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {clips?.map((c) => (
+          <Card key={c.id} className="p-3 flex flex-col">
+            <div className="aspect-video rounded bg-black flex items-center justify-center mb-2 overflow-hidden">
+              {signedUrls[c.id] ? (
+                <video src={signedUrls[c.id]} controls className="w-full h-full" preload="metadata" />
+              ) : (
+                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+              )}
+            </div>
+            {scope === "admin" && (
+              <div className="text-xs font-medium truncate">{nameMap.get(c.employee_id) ?? "Employee"}</div>
+            )}
+            <div className="text-[10px] text-muted-foreground flex items-center justify-between">
+              <span>{new Date(c.captured_at).toLocaleString()}</span>
+              <span>{(c.size_bytes / 1024 / 1024).toFixed(2)} MB · {c.duration_seconds}s</span>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// =================== PAYROLL TAB ===================
+function PayrollTab({ role }: { role: AppRole }) {
+  if (role === "employee") return <EmployeePayroll />;
+  return <AdminPayroll />;
+}
+
+function AdminPayroll() {
+  const { companyId } = useAuth();
+  const qc = useQueryClient();
+  const calcFn = useServerFn(calculateSalary);
+  const overrideFn = useServerFn(overrideSalary);
+  const finalizeFn = useServerFn(finalizeSalary);
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [busy, setBusy] = useState(false);
+  const [overrideRow, setOverrideRow] = useState<any | null>(null);
+  const [overrideVal, setOverrideVal] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
+
+  const { data: rows } = useQuery({
+    enabled: !!companyId,
+    queryKey: ["salaries", companyId, year, month],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("salary_records")
+        .select("*, profiles!salary_records_employee_id_fkey(full_name, email)")
+        .eq("company_id", companyId!)
+        .eq("period_year", year)
+        .eq("period_month", month);
+      return data ?? [];
+    },
+  });
+
+  async function runCalc() {
+    setBusy(true);
+    try {
+      const res = await calcFn({ data: { companyId: companyId!, year, month } });
+      toast.success(`Calculated for ${res.count} employees`);
+      qc.invalidateQueries({ queryKey: ["salaries", companyId, year, month] });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const totalPayroll = (rows ?? []).reduce(
+    (s, r) => s + Number(r.override_amount ?? r.total_amount ?? 0),
+    0,
+  );
+  const currency = rows?.[0]?.currency ?? "USD";
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-4">
+        <div className="grid sm:grid-cols-4 gap-3 items-end">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Year</Label>
+            <Input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Month</Label>
+            <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="w-full h-9 rounded-md border bg-transparent px-3 text-sm">
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                <option key={m} value={m}>{new Date(2024, m - 1).toLocaleString(undefined, { month: "long" })}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Button onClick={runCalc} disabled={busy} className="w-full">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calculator className="w-4 h-4" />}
+              {busy ? "Calculating…" : "Calculate / refresh payroll"}
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-4 bg-gradient-to-br from-primary/10 to-accent/30">
+        <div className="text-xs uppercase text-muted-foreground font-semibold">Total payroll this period</div>
+        <div className="text-3xl font-bold text-primary mt-1">
+          {currency} {totalPayroll.toFixed(2)}
+        </div>
+        <div className="text-xs text-muted-foreground mt-1">
+          {rows?.length ?? 0} employees · {year}-{String(month).padStart(2, "0")}
+        </div>
+      </Card>
+
+      <Card className="p-0 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-xs">
+              <tr>
+                <th className="text-left p-2">Employee</th>
+                <th className="text-right p-2">Worked</th>
+                <th className="text-right p-2">Expected</th>
+                <th className="text-right p-2">Prorated</th>
+                <th className="text-right p-2">OT</th>
+                <th className="text-right p-2">Total</th>
+                <th className="text-right p-2">Status</th>
+                <th className="p-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows?.map((r: any) => {
+                const final = Number(r.override_amount ?? r.total_amount ?? 0);
+                return (
+                  <tr key={r.id} className="border-t">
+                    <td className="p-2 truncate max-w-[160px]">{r.profiles?.full_name ?? r.profiles?.email ?? "—"}</td>
+                    <td className="p-2 text-right font-mono text-xs">{Number(r.worked_hours).toFixed(1)}h</td>
+                    <td className="p-2 text-right font-mono text-xs">{Number(r.expected_hours).toFixed(0)}h</td>
+                    <td className="p-2 text-right font-mono text-xs">{Number(r.prorated_amount).toFixed(2)}</td>
+                    <td className="p-2 text-right font-mono text-xs">{Number(r.overtime_amount).toFixed(2)}</td>
+                    <td className="p-2 text-right font-mono font-semibold">{r.currency} {final.toFixed(2)}</td>
+                    <td className="p-2 text-right">
+                      <Badge variant={r.status === "finalized" ? "default" : "secondary"} className="text-[10px]">
+                        {r.status}
+                      </Badge>
+                    </td>
+                    <td className="p-2 text-right whitespace-nowrap">
+                      {r.status !== "finalized" ? (
+                        <>
+                          <Button size="sm" variant="ghost" onClick={() => {
+                            setOverrideRow(r);
+                            setOverrideVal(String(r.override_amount ?? r.total_amount));
+                            setOverrideReason(r.override_reason ?? "");
+                          }}>
+                            <Edit3 className="w-3 h-3" />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={async () => {
+                            await finalizeFn({ data: { salaryId: r.id, companyId: companyId! } });
+                            toast.success("Finalized");
+                            qc.invalidateQueries({ queryKey: ["salaries", companyId, year, month] });
+                          }}>
+                            <Lock className="w-3 h-3" />
+                          </Button>
+                        </>
+                      ) : (
+                        <Lock className="w-3 h-3 text-success inline" />
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {(!rows || rows.length === 0) && (
+                <tr>
+                  <td colSpan={8} className="text-center text-muted-foreground p-8 text-sm">
+                    No salary records. Click "Calculate" to generate from this month's attendance.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <Dialog open={!!overrideRow} onOpenChange={(o) => !o && setOverrideRow(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Override salary</DialogTitle>
+            <DialogDescription>
+              Set a custom payment amount and reason. The calculated value is kept for audit.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Override amount ({overrideRow?.currency})</Label>
+              <Input type="number" value={overrideVal} onChange={(e) => setOverrideVal(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Reason</Label>
+              <Textarea rows={2} value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOverrideRow(null)}>Cancel</Button>
+            <Button onClick={async () => {
+              await overrideFn({
+                data: {
+                  salaryId: overrideRow.id,
+                  companyId: companyId!,
+                  overrideAmount: Number(overrideVal),
+                  reason: overrideReason,
+                },
+              });
+              toast.success("Override saved");
+              qc.invalidateQueries({ queryKey: ["salaries", companyId, year, month] });
+              setOverrideRow(null);
+            }}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function EmployeePayroll() {
+  const { user } = useAuth();
+  const { data: rows } = useQuery({
+    enabled: !!user,
+    queryKey: ["my-salary", user?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("salary_records")
+        .select("*")
+        .eq("employee_id", user!.id)
+        .order("period_year", { ascending: false })
+        .order("period_month", { ascending: false })
+        .limit(12);
+      return data ?? [];
+    },
+  });
+
+  const latest = rows?.[0];
+
+  return (
+    <div className="space-y-4">
+      {latest ? (
+        <Card className="p-5 bg-gradient-to-br from-primary/10 to-accent/30">
+          <div className="text-xs uppercase text-muted-foreground font-semibold">
+            {new Date(latest.period_year, latest.period_month - 1).toLocaleString(undefined, { month: "long", year: "numeric" })}
+          </div>
+          <div className="text-4xl font-bold text-primary mt-1">
+            {latest.currency} {Number(latest.override_amount ?? latest.total_amount).toFixed(2)}
+          </div>
+          <div className="text-xs text-muted-foreground mt-2">
+            {Number(latest.worked_hours).toFixed(1)}h worked of {Number(latest.expected_hours).toFixed(0)}h expected
+            · Status: <Badge variant={latest.status === "finalized" ? "default" : "secondary"} className="text-[10px] ml-1">{latest.status}</Badge>
+          </div>
+        </Card>
+      ) : (
+        <Card className="p-8 text-center">
+          <DollarSign className="w-8 h-8 text-muted-foreground/60 mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">No salary records yet. Your admin will calculate payroll at month-end.</p>
+        </Card>
+      )}
+
+      <Card className="p-0 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-xs">
+              <tr>
+                <th className="text-left p-2">Period</th>
+                <th className="text-right p-2">Worked</th>
+                <th className="text-right p-2">Total</th>
+                <th className="text-right p-2">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows?.map((r) => (
+                <tr key={r.id} className="border-t">
+                  <td className="p-2">{r.period_year}-{String(r.period_month).padStart(2, "0")}</td>
+                  <td className="p-2 text-right font-mono text-xs">{Number(r.worked_hours).toFixed(1)}h</td>
+                  <td className="p-2 text-right font-mono font-semibold">{r.currency} {Number(r.override_amount ?? r.total_amount).toFixed(2)}</td>
+                  <td className="p-2 text-right">
+                    <Badge variant={r.status === "finalized" ? "default" : "secondary"} className="text-[10px]">{r.status}</Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+}
+

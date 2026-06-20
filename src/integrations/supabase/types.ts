@@ -14,6 +14,72 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_alerts: {
+        Row: {
+          alert_type: string
+          attendance_id: string | null
+          company_id: string
+          created_at: string
+          employee_id: string
+          ended_at: string | null
+          id: string
+          message: string | null
+          metadata: Json | null
+          resolved: boolean
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          started_at: string
+        }
+        Insert: {
+          alert_type: string
+          attendance_id?: string | null
+          company_id: string
+          created_at?: string
+          employee_id: string
+          ended_at?: string | null
+          id?: string
+          message?: string | null
+          metadata?: Json | null
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          started_at?: string
+        }
+        Update: {
+          alert_type?: string
+          attendance_id?: string | null
+          company_id?: string
+          created_at?: string
+          employee_id?: string
+          ended_at?: string | null
+          id?: string
+          message?: string | null
+          metadata?: Json | null
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          started_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_alerts_attendance_id_fkey"
+            columns: ["attendance_id"]
+            isOneToOne: false
+            referencedRelation: "attendance"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_alerts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attendance: {
         Row: {
           active_seconds: number
@@ -22,8 +88,12 @@ export type Database = {
           clock_out: string | null
           company_id: string
           created_at: string
+          edit_reason: string | null
+          edited_at: string | null
+          edited_by: string | null
           id: string
           idle_seconds: number
+          is_manual: boolean
           notes: string | null
           productivity_score: number | null
           status: Database["public"]["Enums"]["attendance_status"]
@@ -38,8 +108,12 @@ export type Database = {
           clock_out?: string | null
           company_id: string
           created_at?: string
+          edit_reason?: string | null
+          edited_at?: string | null
+          edited_by?: string | null
           id?: string
           idle_seconds?: number
+          is_manual?: boolean
           notes?: string | null
           productivity_score?: number | null
           status?: Database["public"]["Enums"]["attendance_status"]
@@ -54,8 +128,12 @@ export type Database = {
           clock_out?: string | null
           company_id?: string
           created_at?: string
+          edit_reason?: string | null
+          edited_at?: string | null
+          edited_by?: string | null
           id?: string
           idle_seconds?: number
+          is_manual?: boolean
           notes?: string | null
           productivity_score?: number | null
           status?: Database["public"]["Enums"]["attendance_status"]
@@ -110,6 +188,63 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "audit_logs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clip_requests: {
+        Row: {
+          clip_id: string | null
+          company_id: string
+          created_at: string
+          duration_seconds: number
+          employee_id: string
+          expires_at: string
+          fulfilled_at: string | null
+          id: string
+          reason: string | null
+          requested_by: string
+          status: string
+        }
+        Insert: {
+          clip_id?: string | null
+          company_id: string
+          created_at?: string
+          duration_seconds?: number
+          employee_id: string
+          expires_at?: string
+          fulfilled_at?: string | null
+          id?: string
+          reason?: string | null
+          requested_by: string
+          status?: string
+        }
+        Update: {
+          clip_id?: string | null
+          company_id?: string
+          created_at?: string
+          duration_seconds?: number
+          employee_id?: string
+          expires_at?: string
+          fulfilled_at?: string | null
+          id?: string
+          reason?: string | null
+          requested_by?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clip_requests_clip_id_fkey"
+            columns: ["clip_id"]
+            isOneToOne: false
+            referencedRelation: "recording_clips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clip_requests_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
@@ -271,11 +406,15 @@ export type Database = {
           avatar_url: string | null
           company_id: string | null
           created_at: string
+          currency: string | null
           department: string | null
           email: string | null
+          expected_monthly_hours: number | null
           full_name: string | null
+          hourly_overtime_rate: number | null
           id: string
           job_title: string | null
+          monthly_salary: number | null
           phone: string | null
           updated_at: string
         }
@@ -283,11 +422,15 @@ export type Database = {
           avatar_url?: string | null
           company_id?: string | null
           created_at?: string
+          currency?: string | null
           department?: string | null
           email?: string | null
+          expected_monthly_hours?: number | null
           full_name?: string | null
+          hourly_overtime_rate?: number | null
           id: string
           job_title?: string | null
+          monthly_salary?: number | null
           phone?: string | null
           updated_at?: string
         }
@@ -295,11 +438,15 @@ export type Database = {
           avatar_url?: string | null
           company_id?: string | null
           created_at?: string
+          currency?: string | null
           department?: string | null
           email?: string | null
+          expected_monthly_hours?: number | null
           full_name?: string | null
+          hourly_overtime_rate?: number | null
           id?: string
           job_title?: string | null
+          monthly_salary?: number | null
           phone?: string | null
           updated_at?: string
         }
@@ -347,6 +494,146 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "projects_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recording_clips: {
+        Row: {
+          attendance_id: string | null
+          captured_at: string
+          company_id: string
+          created_at: string
+          duration_seconds: number
+          employee_id: string
+          id: string
+          mime_type: string
+          notes: string | null
+          requested_by: string | null
+          size_bytes: number
+          storage_path: string
+        }
+        Insert: {
+          attendance_id?: string | null
+          captured_at?: string
+          company_id: string
+          created_at?: string
+          duration_seconds?: number
+          employee_id: string
+          id?: string
+          mime_type?: string
+          notes?: string | null
+          requested_by?: string | null
+          size_bytes?: number
+          storage_path: string
+        }
+        Update: {
+          attendance_id?: string | null
+          captured_at?: string
+          company_id?: string
+          created_at?: string
+          duration_seconds?: number
+          employee_id?: string
+          id?: string
+          mime_type?: string
+          notes?: string | null
+          requested_by?: string | null
+          size_bytes?: number
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recording_clips_attendance_id_fkey"
+            columns: ["attendance_id"]
+            isOneToOne: false
+            referencedRelation: "attendance"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recording_clips_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      salary_records: {
+        Row: {
+          base_salary: number
+          company_id: string
+          created_at: string
+          currency: string
+          employee_id: string
+          expected_hours: number
+          finalized_at: string | null
+          finalized_by: string | null
+          id: string
+          override_amount: number | null
+          override_reason: string | null
+          overtime_amount: number
+          overtime_hours: number
+          overtime_rate: number
+          period_month: number
+          period_year: number
+          prorated_amount: number
+          status: string
+          total_amount: number
+          updated_at: string
+          worked_hours: number
+        }
+        Insert: {
+          base_salary?: number
+          company_id: string
+          created_at?: string
+          currency?: string
+          employee_id: string
+          expected_hours?: number
+          finalized_at?: string | null
+          finalized_by?: string | null
+          id?: string
+          override_amount?: number | null
+          override_reason?: string | null
+          overtime_amount?: number
+          overtime_hours?: number
+          overtime_rate?: number
+          period_month: number
+          period_year: number
+          prorated_amount?: number
+          status?: string
+          total_amount?: number
+          updated_at?: string
+          worked_hours?: number
+        }
+        Update: {
+          base_salary?: number
+          company_id?: string
+          created_at?: string
+          currency?: string
+          employee_id?: string
+          expected_hours?: number
+          finalized_at?: string | null
+          finalized_by?: string | null
+          id?: string
+          override_amount?: number | null
+          override_reason?: string | null
+          overtime_amount?: number
+          overtime_hours?: number
+          overtime_rate?: number
+          period_month?: number
+          period_year?: number
+          prorated_amount?: number
+          status?: string
+          total_amount?: number
+          updated_at?: string
+          worked_hours?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "salary_records_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
