@@ -55,7 +55,7 @@ export const upsertAttendanceManual = createServerFn({ method: "POST" })
     if (!data.reason || data.reason.trim().length < 3)
       throw new Error("A reason (min 3 chars) is required for manual edits");
 
-    const payload: Record<string, unknown> = {
+    const payload = {
       user_id: data.employeeId,
       company_id: data.companyId,
       work_date: data.workDate,
@@ -64,7 +64,12 @@ export const upsertAttendanceManual = createServerFn({ method: "POST" })
       break_seconds: data.breakSeconds ?? 0,
       active_seconds: data.activeSeconds ?? 0,
       idle_seconds: data.idleSeconds ?? 0,
-      status: data.status ?? (data.clockOut ? "clocked_out" : "present"),
+      status: (data.status ?? (data.clockOut ? "clocked_out" : "present")) as
+        | "present"
+        | "on_break"
+        | "clocked_out"
+        | "idle"
+        | "offline",
       is_manual: true,
       edited_by: context.userId,
       edit_reason: data.reason.trim(),
