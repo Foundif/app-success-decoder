@@ -254,37 +254,97 @@ export type Database = {
       }
       companies: {
         Row: {
+          address: string | null
+          brand_color: string | null
+          city: string | null
           created_at: string
+          current_period_end: string | null
+          gst_number: string | null
+          holidays: string[] | null
           id: string
           industry: string | null
           invite_code: string
+          logo_url: string | null
           name: string
           onboarded: boolean
           owner_id: string | null
+          pan_number: string | null
+          phone: string | null
+          plan: string | null
+          postal_code: string | null
+          razorpay_customer_id: string | null
+          razorpay_subscription_id: string | null
           size: string | null
+          state: string | null
+          subscription_status: string | null
+          tagline: string | null
+          trial_ends_at: string | null
           updated_at: string
+          website: string | null
+          weekly_off_days: number[] | null
+          work_hours_per_day: number | null
         }
         Insert: {
+          address?: string | null
+          brand_color?: string | null
+          city?: string | null
           created_at?: string
+          current_period_end?: string | null
+          gst_number?: string | null
+          holidays?: string[] | null
           id?: string
           industry?: string | null
           invite_code: string
+          logo_url?: string | null
           name: string
           onboarded?: boolean
           owner_id?: string | null
+          pan_number?: string | null
+          phone?: string | null
+          plan?: string | null
+          postal_code?: string | null
+          razorpay_customer_id?: string | null
+          razorpay_subscription_id?: string | null
           size?: string | null
+          state?: string | null
+          subscription_status?: string | null
+          tagline?: string | null
+          trial_ends_at?: string | null
           updated_at?: string
+          website?: string | null
+          weekly_off_days?: number[] | null
+          work_hours_per_day?: number | null
         }
         Update: {
+          address?: string | null
+          brand_color?: string | null
+          city?: string | null
           created_at?: string
+          current_period_end?: string | null
+          gst_number?: string | null
+          holidays?: string[] | null
           id?: string
           industry?: string | null
           invite_code?: string
+          logo_url?: string | null
           name?: string
           onboarded?: boolean
           owner_id?: string | null
+          pan_number?: string | null
+          phone?: string | null
+          plan?: string | null
+          postal_code?: string | null
+          razorpay_customer_id?: string | null
+          razorpay_subscription_id?: string | null
           size?: string | null
+          state?: string | null
+          subscription_status?: string | null
+          tagline?: string | null
+          trial_ends_at?: string | null
           updated_at?: string
+          website?: string | null
+          weekly_off_days?: number[] | null
+          work_hours_per_day?: number | null
         }
         Relationships: []
       }
@@ -337,6 +397,96 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      payments: {
+        Row: {
+          amount_inr: number
+          company_id: string
+          created_at: string
+          id: string
+          method: string | null
+          raw: Json | null
+          razorpay_order_id: string | null
+          razorpay_payment_id: string | null
+          status: string
+          subscription_id: string | null
+        }
+        Insert: {
+          amount_inr: number
+          company_id: string
+          created_at?: string
+          id?: string
+          method?: string | null
+          raw?: Json | null
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          status: string
+          subscription_id?: string | null
+        }
+        Update: {
+          amount_inr?: number
+          company_id?: string
+          created_at?: string
+          id?: string
+          method?: string | null
+          raw?: Json | null
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          status?: string
+          subscription_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plans: {
+        Row: {
+          active: boolean | null
+          created_at: string
+          features: Json
+          id: string
+          max_staff: number | null
+          name: string
+          price_inr: number
+          razorpay_plan_id: string | null
+          sort_order: number | null
+        }
+        Insert: {
+          active?: boolean | null
+          created_at?: string
+          features?: Json
+          id: string
+          max_staff?: number | null
+          name: string
+          price_inr: number
+          razorpay_plan_id?: string | null
+          sort_order?: number | null
+        }
+        Update: {
+          active?: boolean | null
+          created_at?: string
+          features?: Json
+          id?: string
+          max_staff?: number | null
+          name?: string
+          price_inr?: number
+          razorpay_plan_id?: string | null
+          sort_order?: number | null
+        }
+        Relationships: []
       }
       productivity_entries: {
         Row: {
@@ -707,6 +857,66 @@ export type Database = {
           },
         ]
       }
+      subscriptions: {
+        Row: {
+          amount_inr: number
+          company_id: string
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          id: string
+          plan_id: string
+          raw: Json | null
+          razorpay_customer_id: string | null
+          razorpay_subscription_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount_inr: number
+          company_id: string
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          plan_id: string
+          raw?: Json | null
+          razorpay_customer_id?: string | null
+          razorpay_subscription_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_inr?: number
+          company_id?: string
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          plan_id?: string
+          raw?: Json | null
+          razorpay_customer_id?: string | null
+          razorpay_subscription_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           company_id: string | null
@@ -744,6 +954,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      company_access_status: {
+        Args: { _company_id: string }
+        Returns: {
+          current_period_end: string
+          is_active: boolean
+          is_readonly: boolean
+          plan: string
+          status: string
+          trial_ends_at: string
+        }[]
+      }
       get_user_company: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
@@ -757,6 +978,13 @@ export type Database = {
         Returns: boolean
       }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      lookup_company_by_invite: {
+        Args: { _code: string }
+        Returns: {
+          company_id: string
+          company_name: string
+        }[]
+      }
     }
     Enums: {
       app_role: "super_admin" | "company_admin" | "employee"

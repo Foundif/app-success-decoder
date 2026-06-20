@@ -38,6 +38,7 @@ import {
   Lock,
   MonitorPlay,
   WifiOff,
+  UserCircle,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -172,6 +173,14 @@ function AppShell({ role }: { role: AppRole }) {
               <div className="text-sm font-medium">{profile?.full_name ?? profile?.email}</div>
               <div className="text-xs text-muted-foreground">{profile?.job_title ?? ""}</div>
             </div>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => navigate({ to: "/profile" })}
+              title="Profile"
+            >
+              <UserCircle className="w-5 h-5" />
+            </Button>
             <Button
               size="icon"
               variant="ghost"
