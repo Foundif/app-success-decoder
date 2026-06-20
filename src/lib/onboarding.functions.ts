@@ -89,6 +89,22 @@ export const generateInviteCodes = createServerFn({ method: "POST" })
       .rpc("is_company_admin", { _user_id: context.userId, _company_id: data.companyId });
     if (!admin) throw new Error("Forbidden");
 
+    // Enforce staff cap based on the company's current plan
+    const { data: co } = await supabaseAdmin
+      .from("companies").select("plan").eq("id", data.companyId).maybeSingle();
+    const planLimits: Record<string, number> = { starter: 5, growth: 25, business: 0 };
+    const limit = co?.plan ? (planLimits[co.plan] ?? 0) : 5; // default cap = starter while no plan
+    if (limit > 0) {
+      const [{ count: existingStaff }, { count: pendingInvites }] = await Promise.all([
+        supabaseAdmin.from("profiles").select("id", { count: "exact", head: true }).eq("company_id", data.companyId),
+        supabaseAdmin.from("invite_codes").select("id", { count: "exact", head: true }).eq("company_id", data.companyId).is("used_at", null),
+      ]);
+      const total = (existingStaff ?? 0) + (pendingInvites ?? 0) + data.employees.length;
+      if (total > limit) {
+        throw new Error(`Your plan allows up to ${limit} staff. Upgrade in Pricing to invite more.`);
+      }
+    }
+
     const rows = data.employees.map((e) => ({
       company_id: data.companyId,
       code: genCode("EMP"),

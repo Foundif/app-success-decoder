@@ -16,6 +16,7 @@ export type AppProfile = {
 
 export type AuthState = {
   loading: boolean;
+  identityLoading: boolean;
   session: Session | null;
   user: User | null;
   profile: AppProfile | null;
@@ -37,19 +38,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<AppProfile | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
+  const [identityLoading, setIdentityLoading] = useState(true);
 
   async function loadIdentity(u: User | null) {
     if (!u) {
       setProfile(null);
       setRoles([]);
+      setIdentityLoading(false);
       return;
     }
+    setIdentityLoading(true);
     const [{ data: prof }, { data: rs }] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", u.id).maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", u.id),
     ]);
     setProfile((prof as AppProfile) ?? null);
     setRoles(((rs ?? []) as { role: AppRole }[]).map((r) => r.role));
+    setIdentityLoading(false);
   }
 
   useEffect(() => {
@@ -58,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!mounted) return;
       setSession(s);
       setUser(s?.user ?? null);
+      if (s?.user) setIdentityLoading(true);
       setTimeout(() => loadIdentity(s?.user ?? null), 0);
     });
     supabase.auth.getSession().then(async ({ data }) => {
@@ -83,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value: AuthState = {
     loading,
+    identityLoading,
     session,
     user,
     profile,

@@ -154,13 +154,13 @@ function OnboardingPage() {
     <div className="min-h-screen bg-background">
       {/* Top bar */}
       <header className="border-b bg-card/50 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
+        <div className="max-w-5xl mx-auto px-3 sm:px-4 py-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shrink-0">
               <Briefcase className="w-4 h-4 text-primary-foreground" />
             </div>
-            <div>
-              <div className="font-bold leading-none">TillTask Setup</div>
+            <div className="min-w-0">
+              <div className="font-bold leading-none truncate">TillTask Setup</div>
               <div className="text-xs text-muted-foreground">Step {step} of 4</div>
             </div>
           </div>
@@ -170,7 +170,7 @@ function OnboardingPage() {
         </div>
       </header>
 
-      <div className="max-w-5xl mx-auto px-4 py-8 grid lg:grid-cols-[260px_1fr] gap-8">
+      <div className="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-8 grid lg:grid-cols-[260px_1fr] gap-4 lg:gap-8">
         {/* Stepper */}
         <Stepper step={step} />
 

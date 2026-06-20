@@ -40,6 +40,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getCompanyProfile, updateCompanyProfile, updateMyProfile } from "@/lib/profile.functions";
 import { getBillingStatus } from "@/lib/billing.functions";
 import { formatINR } from "@/lib/format";
+import { SecondaryShell } from "@/components/side-nav";
 
 export const Route = createFileRoute("/profile")({
   head: () => ({ meta: [{ title: "Profile — TillTask" }] }),
@@ -180,7 +181,9 @@ function ProfilePage() {
   const brand = company?.brand_color || "#0F172A";
 
   return (
+    <SecondaryShell active="profile">
     <div className="min-h-screen bg-muted/30">
+
       <header className="bg-card border-b sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 py-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
           <Link to="/" className="p-2 -ml-2 rounded-md hover:bg-muted">
@@ -495,6 +498,7 @@ function ProfilePage() {
         </DialogContent>
       </Dialog>
     </div>
+    </SecondaryShell>
   );
 }
 

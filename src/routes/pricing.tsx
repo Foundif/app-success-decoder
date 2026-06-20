@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth-context";
 import { listPlans, createOrder, verifyPayment, getBillingStatus } from "@/lib/billing.functions";
 import { formatINR } from "@/lib/format";
+import { SecondaryShell } from "@/components/side-nav";
 
 export const Route = createFileRoute("/pricing")({
   head: () => ({
@@ -127,8 +128,10 @@ function PricingPage() {
   }
 
   return (
+    <SecondaryShell active="pricing">
     <div className="min-h-screen bg-background">
       <header className="border-b">
+
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
             <ArrowLeft className="w-4 h-4" /> Back
@@ -219,6 +222,7 @@ function PricingPage() {
         </div>
       </main>
     </div>
+    </SecondaryShell>
   );
 }
 
