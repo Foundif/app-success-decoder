@@ -105,26 +105,46 @@ export const Route = createFileRoute("/")({
 });
 
 function HomeGate() {
-  const { loading, user, primaryRole, companyId } = useAuth();
+  const { loading, identityLoading, user, primaryRole, companyId, profile } = useAuth();
   const navigate = useNavigate();
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || identityLoading) return;
     if (!user) {
       navigate({ to: "/auth" });
       return;
     }
+    // Wait until profile actually resolved before deciding to send admins to onboarding
     if (!primaryRole) {
-      // signed in but no role yet → admin must set up a company
       navigate({ to: "/onboarding" });
       return;
     }
-    if (primaryRole === "company_admin" && !companyId) {
-      navigate({ to: "/onboarding" });
+    if (primaryRole === "company_admin") {
+      if (!companyId) {
+        navigate({ to: "/onboarding" });
+        return;
+      }
+      // Only redirect if the company hasn't completed onboarding
+      (async () => {
+        const { data } = await supabase
+          .from("companies")
+          .select("onboarded")
+          .eq("id", companyId)
+          .maybeSingle();
+        if (data && data.onboarded === false) {
+          setNeedsOnboarding(true);
+          navigate({ to: "/onboarding" });
+        }
+        setOnboardingChecked(true);
+      })();
+    } else {
+      setOnboardingChecked(true);
     }
-  }, [loading, user, primaryRole, companyId, navigate]);
+  }, [loading, identityLoading, user, primaryRole, companyId, profile, navigate]);
 
-  if (loading || !user || !primaryRole) {
+  if (loading || identityLoading || !user || !primaryRole || (primaryRole === "company_admin" && !onboardingChecked) || needsOnboarding) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-6 h-6 animate-spin text-primary" />
