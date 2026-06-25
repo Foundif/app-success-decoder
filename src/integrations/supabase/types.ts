@@ -455,34 +455,43 @@ export type Database = {
       plans: {
         Row: {
           active: boolean | null
+          contact_only: boolean | null
           created_at: string
           features: Json
           id: string
           max_staff: number | null
           name: string
+          per_user: boolean | null
           price_inr: number
+          price_inr_yearly: number | null
           razorpay_plan_id: string | null
           sort_order: number | null
         }
         Insert: {
           active?: boolean | null
+          contact_only?: boolean | null
           created_at?: string
           features?: Json
           id: string
           max_staff?: number | null
           name: string
+          per_user?: boolean | null
           price_inr: number
+          price_inr_yearly?: number | null
           razorpay_plan_id?: string | null
           sort_order?: number | null
         }
         Update: {
           active?: boolean | null
+          contact_only?: boolean | null
           created_at?: string
           features?: Json
           id?: string
           max_staff?: number | null
           name?: string
+          per_user?: boolean | null
           price_inr?: number
+          price_inr_yearly?: number | null
           razorpay_plan_id?: string | null
           sort_order?: number | null
         }
@@ -860,6 +869,7 @@ export type Database = {
       subscriptions: {
         Row: {
           amount_inr: number
+          billing_cycle: string | null
           company_id: string
           created_at: string
           current_period_end: string | null
@@ -869,11 +879,13 @@ export type Database = {
           raw: Json | null
           razorpay_customer_id: string | null
           razorpay_subscription_id: string | null
+          seats: number | null
           status: string
           updated_at: string
         }
         Insert: {
           amount_inr: number
+          billing_cycle?: string | null
           company_id: string
           created_at?: string
           current_period_end?: string | null
@@ -883,11 +895,13 @@ export type Database = {
           raw?: Json | null
           razorpay_customer_id?: string | null
           razorpay_subscription_id?: string | null
+          seats?: number | null
           status?: string
           updated_at?: string
         }
         Update: {
           amount_inr?: number
+          billing_cycle?: string | null
           company_id?: string
           created_at?: string
           current_period_end?: string | null
@@ -897,6 +911,7 @@ export type Database = {
           raw?: Json | null
           razorpay_customer_id?: string | null
           razorpay_subscription_id?: string | null
+          seats?: number | null
           status?: string
           updated_at?: string
         }
@@ -906,13 +921,6 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "subscriptions_plan_id_fkey"
-            columns: ["plan_id"]
-            isOneToOne: false
-            referencedRelation: "plans"
             referencedColumns: ["id"]
           },
         ]

@@ -50,8 +50,8 @@
   --card-foreground: oklch(0.18 0.02 60);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.18 0.02 60);
-  /* Construction amber */
-  --primary: oklch(0.72 0.17 55);
+  /* TillTask logo orange (~#F26B2A) */
+  --primary: oklch(0.685 0.195 45);
   --primary-foreground: oklch(0.18 0.02 60);
   --secondary: oklch(0.95 0.015 75);
   --secondary-foreground: oklch(0.25 0.02 60);
@@ -67,7 +67,7 @@
   --warning-foreground: oklch(0.2 0.02 60);
   --border: oklch(0.9 0.01 80);
   --input: oklch(0.92 0.01 80);
-  --ring: oklch(0.72 0.17 55);
+  --ring: oklch(0.685 0.195 45);
 }
 
 @layer base {

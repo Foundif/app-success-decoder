@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   LogIn,
 } from "lucide-react";
+import { BrandLockup } from "@/components/brand";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,12 +49,7 @@ function AuthPage() {
     <div className="min-h-screen grid lg:grid-cols-2 bg-background">
       {/* Hero / brand panel */}
       <aside className="hidden lg:flex flex-col justify-between p-10 bg-gradient-to-br from-primary/15 via-accent/30 to-background border-r">
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-            <Briefcase className="w-5 h-5 text-primary-foreground" />
-          </div>
-          <span className="text-xl font-bold">TillTask</span>
-        </div>
+        <BrandLockup className="h-9" />
         <div className="space-y-6 max-w-sm">
           <h1 className="text-4xl font-bold leading-tight tracking-tight">
             Remote teams, measured fairly.
@@ -74,10 +70,7 @@ function AuthPage() {
       <main className="flex flex-col items-center justify-center px-4 py-10 sm:px-8">
         <div className="w-full max-w-md">
           <div className="lg:hidden flex items-center gap-2 justify-center mb-6">
-            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-              <Briefcase className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="text-2xl font-bold">TillTask</span>
+            <BrandLockup className="h-9" />
           </div>
 
           <div className="grid grid-cols-2 gap-1 mb-6 p-1 bg-muted rounded-xl text-sm">

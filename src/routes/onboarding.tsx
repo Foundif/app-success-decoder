@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+import { BrandLockup } from "@/components/brand";
 import {
   Loader2,
   Building2,
@@ -156,12 +157,10 @@ function OnboardingPage() {
       <header className="border-b bg-card/50 backdrop-blur sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-3 sm:px-4 py-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shrink-0">
-              <Briefcase className="w-4 h-4 text-primary-foreground" />
-            </div>
-            <div className="min-w-0">
-              <div className="font-bold leading-none truncate">TillTask Setup</div>
-              <div className="text-xs text-muted-foreground">Step {step} of 4</div>
+            <BrandLockup className="h-7" />
+            <div className="hidden sm:block min-w-0 pl-2 border-l">
+              <div className="text-xs font-semibold leading-none">Setup</div>
+              <div className="text-[11px] text-muted-foreground">Step {step} of 4</div>
             </div>
           </div>
           <Button variant="ghost" size="sm" onClick={() => navigate({ to: "/" })}>

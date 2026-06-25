@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { getBillingStatus } from "@/lib/billing.functions";
 import { useAuth } from "@/lib/auth-context";
 
-export type PlanTier = "starter" | "growth" | "business" | null;
+export type PlanTier = "starter" | "growth" | "scale" | "enterprise" | null;
 
 export type PlanFeatures = {
   tier: PlanTier;
@@ -13,40 +13,71 @@ export type PlanFeatures = {
   advancedReports: boolean;
   recording: boolean;
   alerts: boolean;
+  exportReports: boolean;
+  projectTracking: boolean;
+  apiAccess: boolean;
+  prioritySupport: boolean;
   readonly: boolean;
   isActive: boolean;
   status: string | null;
   daysLeft: number;
 };
 
-const MATRIX: Record<string, Omit<PlanFeatures, "tier" | "readonly" | "isActive" | "status" | "daysLeft">> = {
+type BaseFeatures = Omit<PlanFeatures, "tier" | "readonly" | "isActive" | "status" | "daysLeft">;
+
+const MATRIX: Record<string, BaseFeatures> = {
   starter: {
-    staffLimit: 5,
+    staffLimit: 10,
     payroll: false,
     auditLog: false,
     advancedReports: false,
     recording: true,
     alerts: true,
+    exportReports: false,
+    projectTracking: false,
+    apiAccess: false,
+    prioritySupport: false,
   },
   growth: {
-    staffLimit: 25,
+    staffLimit: 50,
     payroll: true,
-    auditLog: false,
+    auditLog: true,
     advancedReports: true,
     recording: true,
     alerts: true,
+    exportReports: true,
+    projectTracking: true,
+    apiAccess: false,
+    prioritySupport: false,
   },
-  business: {
+  scale: {
+    staffLimit: 200,
+    payroll: true,
+    auditLog: true,
+    advancedReports: true,
+    recording: true,
+    alerts: true,
+    exportReports: true,
+    projectTracking: true,
+    apiAccess: true,
+    prioritySupport: true,
+  },
+  enterprise: {
     staffLimit: 0,
     payroll: true,
     auditLog: true,
     advancedReports: true,
     recording: true,
     alerts: true,
+    exportReports: true,
+    projectTracking: true,
+    apiAccess: true,
+    prioritySupport: true,
   },
 };
 
-const TRIAL_DEFAULT = MATRIX.business; // give full features during trial
+// Trial users get Growth-level features so they can evaluate the product.
+const TRIAL_DEFAULT = MATRIX.growth;
 
 export function usePlan(): PlanFeatures {
   const { user } = useAuth();

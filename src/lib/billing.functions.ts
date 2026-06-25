@@ -26,7 +26,14 @@ export const listPlans = createServerFn({ method: "GET" }).handler(async () => {
 // We use one-time orders (not subscriptions) for simplicity & guaranteed live-mode support.
 export const createOrder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(z.object({ planId: z.string().min(1), companyId: z.string().uuid() }).parse)
+  .inputValidator(
+    z.object({
+      planId: z.string().min(1),
+      companyId: z.string().uuid(),
+      billingCycle: z.enum(["monthly", "yearly"]).default("monthly"),
+      seats: z.number().int().min(1).max(2000).default(1),
+    }).parse,
+  )
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -42,8 +49,14 @@ export const createOrder = createServerFn({ method: "POST" })
       .eq("id", data.planId)
       .single();
     if (!plan) throw new Error("Plan not found");
+    if (plan.contact_only) throw new Error("Enterprise plans require contacting sales");
 
-    const amountPaise = plan.price_inr * 100;
+    const unitInr =
+      data.billingCycle === "yearly"
+        ? plan.price_inr_yearly ?? plan.price_inr * 12
+        : plan.price_inr;
+    const totalInr = unitInr * data.seats;
+    const amountPaise = totalInr * 100;
     const receipt = `c_${data.companyId.slice(0, 8)}_${Date.now()}`;
 
     const r = await fetch(`${RZP_BASE}/orders`, {
@@ -53,7 +66,13 @@ export const createOrder = createServerFn({ method: "POST" })
         amount: amountPaise,
         currency: "INR",
         receipt,
-        notes: { company_id: data.companyId, plan_id: data.planId, user_id: context.userId },
+        notes: {
+          company_id: data.companyId,
+          plan_id: data.planId,
+          user_id: context.userId,
+          billing_cycle: data.billingCycle,
+          seats: String(data.seats),
+        },
       }),
     });
     if (!r.ok) {
@@ -62,12 +81,13 @@ export const createOrder = createServerFn({ method: "POST" })
     }
     const order = (await r.json()) as { id: string; amount: number; currency: string };
 
-    // Create a pending subscription row we'll activate on webhook/verify
     await supabaseAdmin.from("subscriptions").insert({
       company_id: data.companyId,
       plan_id: data.planId,
-      amount_inr: plan.price_inr,
+      amount_inr: totalInr,
       status: "created",
+      billing_cycle: data.billingCycle,
+      seats: data.seats,
       raw: { razorpay_order_id: order.id },
     });
 
@@ -77,6 +97,7 @@ export const createOrder = createServerFn({ method: "POST" })
       currency: order.currency,
       keyId: process.env.RAZORPAY_KEY_ID!,
       planName: plan.name,
+      totalInr,
     };
   });
 
@@ -87,6 +108,8 @@ export const verifyPayment = createServerFn({ method: "POST" })
     z.object({
       companyId: z.string().uuid(),
       planId: z.string(),
+      billingCycle: z.enum(["monthly", "yearly"]).default("monthly"),
+      seats: z.number().int().min(1).max(2000).default(1),
       razorpay_order_id: z.string(),
       razorpay_payment_id: z.string(),
       razorpay_signature: z.string(),
@@ -107,10 +130,20 @@ export const verifyPayment = createServerFn({ method: "POST" })
     if (!isAdmin) throw new Error("Forbidden");
 
     const periodEnd = new Date();
-    periodEnd.setMonth(periodEnd.getMonth() + 1);
+    if (data.billingCycle === "yearly") periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+    else periodEnd.setMonth(periodEnd.getMonth() + 1);
 
     const { data: plan } = await supabaseAdmin
-      .from("plans").select("price_inr").eq("id", data.planId).single();
+      .from("plans")
+      .select("price_inr,price_inr_yearly")
+      .eq("id", data.planId)
+      .single();
+    const unit =
+      data.billingCycle === "yearly"
+        ? plan?.price_inr_yearly ?? (plan?.price_inr ?? 0) * 12
+        : plan?.price_inr ?? 0;
+    const total = unit * data.seats;
+
 
     await supabaseAdmin
       .from("companies")
@@ -125,7 +158,7 @@ export const verifyPayment = createServerFn({ method: "POST" })
       company_id: data.companyId,
       razorpay_payment_id: data.razorpay_payment_id,
       razorpay_order_id: data.razorpay_order_id,
-      amount_inr: plan?.price_inr ?? 0,
+      amount_inr: total,
       status: "captured",
       method: "razorpay",
     });
@@ -159,13 +192,24 @@ export const getBillingStatus = createServerFn({ method: "GET" })
     const { supabase, userId } = context;
     const { data: prof } = await supabase
       .from("profiles").select("company_id").eq("id", userId).maybeSingle();
-    if (!prof?.company_id) return null;
+    if (!prof?.company_id)
+      return {
+        companyId: null,
+        companyName: null,
+        plan: null,
+        status: null,
+        trialEndsAt: null,
+        currentPeriodEnd: null,
+        isActive: false,
+        isReadonly: true,
+        daysLeft: 0,
+      };
     const { data: c } = await supabase
       .from("companies")
       .select("id,name,plan,subscription_status,trial_ends_at,current_period_end")
       .eq("id", prof.company_id)
       .single();
-    if (!c) return null;
+    if (!c) return { companyId: prof.company_id, companyName: null, plan: null, status: null, trialEndsAt: null, currentPeriodEnd: null, isActive: false, isReadonly: true, daysLeft: 0 };
     const now = Date.now();
     const trialEnd = c.trial_ends_at ? new Date(c.trial_ends_at).getTime() : 0;
     const periodEnd = c.current_period_end ? new Date(c.current_period_end).getTime() : 0;

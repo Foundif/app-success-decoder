@@ -91,6 +91,9 @@ import {
 } from "@/lib/workforce.functions";
 import { CaptureSession } from "@/lib/capture";
 import { usePlan } from "@/lib/usePlan";
+import { formatINR } from "@/lib/format";
+import { BrandLockup, BrandMark } from "@/components/brand";
+import { MobileMenuTrigger } from "@/components/mobile-menu";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -189,14 +192,9 @@ function AppShell({ role }: { role: AppRole }) {
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex w-72 shrink-0 border-r bg-card flex-col sticky top-0 h-screen">
         <div className="flex items-center gap-3 px-5 py-5 border-b">
-          <div className="w-11 h-11 rounded-2xl bg-foreground flex items-center justify-center shadow-sm">
-            <Briefcase className="w-5 h-5 text-background" />
-          </div>
-          <div className="min-w-0">
-            <div className="font-bold text-lg leading-tight truncate">TillTask</div>
-            <div className="text-[10px] tracking-widest uppercase text-muted-foreground font-semibold truncate">
-              {roleLabel}
-            </div>
+          <BrandLockup className="h-8" />
+          <div className="ml-auto text-[10px] tracking-widest uppercase text-muted-foreground font-semibold text-right">
+            {roleLabel}
           </div>
         </div>
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
@@ -269,14 +267,13 @@ function AppShell({ role }: { role: AppRole }) {
 
       <div className="flex-1 min-w-0 pb-24 lg:pb-0">
         <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b lg:border-b">
-          <div className="max-w-screen-xl mx-auto px-4 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-2 lg:hidden">
-              <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
-                <Briefcase className="w-4 h-4 text-primary-foreground" />
-              </div>
-              <div>
-                <div className="font-bold leading-none">TillTask</div>
-                <div className="text-xs text-muted-foreground capitalize">
+          <div className="max-w-screen-xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 lg:hidden min-w-0">
+              <MobileMenuTrigger />
+              <BrandMark className="w-9 h-9 rounded-xl" />
+              <div className="min-w-0">
+                <div className="font-bold leading-none truncate">TillTask</div>
+                <div className="text-xs text-muted-foreground capitalize truncate">
                   {role.replace("_", " ")}
                 </div>
               </div>
@@ -2000,7 +1997,7 @@ function CompensationDialog({
   });
   const [salary, setSalary] = useState("0");
   const [hours, setHours] = useState("160");
-  const [currency, setCurrency] = useState("USD");
+  const [currency, setCurrency] = useState("INR");
   const [otRate, setOtRate] = useState("0");
   const [busy, setBusy] = useState(false);
 
@@ -2008,7 +2005,7 @@ function CompensationDialog({
     if (current) {
       setSalary(String(current.monthly_salary ?? 0));
       setHours(String(current.expected_monthly_hours ?? 160));
-      setCurrency(current.currency ?? "USD");
+      setCurrency(current.currency ?? "INR");
       setOtRate(String(current.hourly_overtime_rate ?? 0));
     }
   }, [current]);
@@ -2496,7 +2493,7 @@ function AdminPayroll() {
     (s, r) => s + Number(r.override_amount ?? r.total_amount ?? 0),
     0,
   );
-  const currency = rows?.[0]?.currency ?? "USD";
+  const currency = rows?.[0]?.currency ?? "INR";
 
   return (
     <div className="space-y-4">
@@ -2526,7 +2523,7 @@ function AdminPayroll() {
       <Card className="p-4 bg-gradient-to-br from-primary/10 to-accent/30">
         <div className="text-xs uppercase text-muted-foreground font-semibold">Total payroll this period</div>
         <div className="text-3xl font-bold text-primary mt-1">
-          {currency} {totalPayroll.toFixed(2)}
+          {formatINR(totalPayroll)}
         </div>
         <div className="text-xs text-muted-foreground mt-1">
           {rows?.length ?? 0} employees · {year}-{String(month).padStart(2, "0")}
@@ -2556,9 +2553,9 @@ function AdminPayroll() {
                     <td className="p-2 truncate max-w-[160px]">{r.profiles?.full_name ?? r.profiles?.email ?? "—"}</td>
                     <td className="p-2 text-right font-mono text-xs">{Number(r.worked_hours).toFixed(1)}h</td>
                     <td className="p-2 text-right font-mono text-xs">{Number(r.expected_hours).toFixed(0)}h</td>
-                    <td className="p-2 text-right font-mono text-xs">{Number(r.prorated_amount).toFixed(2)}</td>
-                    <td className="p-2 text-right font-mono text-xs">{Number(r.overtime_amount).toFixed(2)}</td>
-                    <td className="p-2 text-right font-mono font-semibold">{r.currency} {final.toFixed(2)}</td>
+                    <td className="p-2 text-right font-mono text-xs">{formatINR(Number(r.prorated_amount))}</td>
+                    <td className="p-2 text-right font-mono text-xs">{formatINR(Number(r.overtime_amount))}</td>
+                    <td className="p-2 text-right font-mono font-semibold">{formatINR(final)}</td>
                     <td className="p-2 text-right">
                       <Badge variant={r.status === "finalized" ? "default" : "secondary"} className="text-[10px]">
                         {r.status}
@@ -2611,7 +2608,7 @@ function AdminPayroll() {
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-xs">Override amount ({overrideRow?.currency})</Label>
+              <Label className="text-xs">Override amount (INR)</Label>
               <Input type="number" value={overrideVal} onChange={(e) => setOverrideVal(e.target.value)} />
             </div>
             <div className="space-y-1.5">
