@@ -1,6 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
 import {
-  Briefcase,
   LayoutDashboard,
   DollarSign,
   UserCircle,
@@ -11,6 +10,9 @@ import {
 import type { ReactNode } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { usePlan } from "@/lib/usePlan";
+import { BrandLockup } from "@/components/brand";
+import { MobileMenuTrigger } from "@/components/mobile-menu";
+import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 
 type Item = { label: string; icon: React.ElementType; to: string; adminOnly?: boolean };
 
@@ -28,15 +30,18 @@ export function SideNav({ active }: { active: "home" | "pricing" | "profile" | n
   ];
   const visible = items.filter((i) => !i.adminOnly || isAdmin);
 
+  const planLabel = plan.tier
+    ? plan.tier.charAt(0).toUpperCase() + plan.tier.slice(1)
+    : plan.status === "trial"
+      ? "Trial"
+      : "Free";
+
   return (
     <aside className="hidden lg:flex w-72 shrink-0 border-r bg-card flex-col sticky top-0 h-screen">
       <div className="flex items-center gap-3 px-5 py-5 border-b">
-        <div className="w-11 h-11 rounded-2xl bg-foreground flex items-center justify-center shadow-sm">
-          <Briefcase className="w-5 h-5 text-background" />
-        </div>
-        <div className="min-w-0">
-          <div className="font-bold text-lg leading-tight truncate">TillTask</div>
-          <div className="text-[10px] tracking-widest uppercase text-muted-foreground font-semibold truncate">
+        <BrandLockup className="h-8" />
+        <div className="min-w-0 ml-auto">
+          <div className="text-[10px] tracking-widest uppercase text-muted-foreground font-semibold truncate text-right">
             {roleLabel}
           </div>
         </div>
@@ -69,8 +74,13 @@ export function SideNav({ active }: { active: "home" | "pricing" | "profile" | n
           <div className="rounded-2xl border bg-muted/50 p-3 space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-sm font-semibold">
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    plan.isActive ? "bg-success" : "bg-destructive"
+                  }`}
+                />
                 <Crown className="w-4 h-4 text-primary" />
-                <span className="capitalize">{plan.tier ?? (plan.status === "trial" ? "Trial" : "Free")}</span>
+                <span>{planLabel} plan</span>
               </div>
               {plan.status === "trial" && (
                 <span className="text-[10px] text-muted-foreground font-medium">
@@ -84,7 +94,7 @@ export function SideNav({ active }: { active: "home" | "pricing" | "profile" | n
                 onClick={() => navigate({ to: "/pricing" })}
                 className="w-full flex items-center justify-center gap-1.5 bg-foreground text-background rounded-xl py-2.5 text-sm font-semibold hover:opacity-90 transition"
               >
-                <Sparkles className="w-4 h-4" /> Upgrade to Pro
+                <Sparkles className="w-4 h-4" /> Upgrade plan
               </button>
             )}
           </div>
@@ -103,6 +113,12 @@ export function SideNav({ active }: { active: "home" | "pricing" | "profile" | n
   );
 }
 
+/**
+ * Layout shell for non-Home pages (Profile, Pricing). Provides:
+ *  - desktop left sidebar
+ *  - mobile header with hamburger + brand
+ *  - mobile bottom nav so users keep app navigation away from /
+ */
 export function SecondaryShell({
   active,
   children,
@@ -113,7 +129,19 @@ export function SecondaryShell({
   return (
     <div className="min-h-screen bg-background flex">
       <SideNav active={active} />
-      <div className="flex-1 min-w-0">{children}</div>
+      <div className="flex-1 min-w-0 pb-24 lg:pb-0">
+        <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b lg:hidden">
+          <div className="max-w-screen-xl mx-auto px-3 py-2.5 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <MobileMenuTrigger />
+              <BrandLockup className="h-6" />
+            </div>
+            <div className="text-xs text-muted-foreground capitalize">{active}</div>
+          </div>
+        </header>
+        {children}
+      </div>
+      <MobileBottomNav />
     </div>
   );
 }

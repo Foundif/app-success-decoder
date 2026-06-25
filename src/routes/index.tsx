@@ -91,6 +91,7 @@ import {
 } from "@/lib/workforce.functions";
 import { CaptureSession } from "@/lib/capture";
 import { usePlan } from "@/lib/usePlan";
+import { formatINR } from "@/lib/format";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -2000,7 +2001,7 @@ function CompensationDialog({
   });
   const [salary, setSalary] = useState("0");
   const [hours, setHours] = useState("160");
-  const [currency, setCurrency] = useState("USD");
+  const [currency, setCurrency] = useState("INR");
   const [otRate, setOtRate] = useState("0");
   const [busy, setBusy] = useState(false);
 
@@ -2008,7 +2009,7 @@ function CompensationDialog({
     if (current) {
       setSalary(String(current.monthly_salary ?? 0));
       setHours(String(current.expected_monthly_hours ?? 160));
-      setCurrency(current.currency ?? "USD");
+      setCurrency(current.currency ?? "INR");
       setOtRate(String(current.hourly_overtime_rate ?? 0));
     }
   }, [current]);
@@ -2496,7 +2497,7 @@ function AdminPayroll() {
     (s, r) => s + Number(r.override_amount ?? r.total_amount ?? 0),
     0,
   );
-  const currency = rows?.[0]?.currency ?? "USD";
+  const currency = rows?.[0]?.currency ?? "INR";
 
   return (
     <div className="space-y-4">
@@ -2526,7 +2527,7 @@ function AdminPayroll() {
       <Card className="p-4 bg-gradient-to-br from-primary/10 to-accent/30">
         <div className="text-xs uppercase text-muted-foreground font-semibold">Total payroll this period</div>
         <div className="text-3xl font-bold text-primary mt-1">
-          {currency} {totalPayroll.toFixed(2)}
+          {formatINR(totalPayroll)}
         </div>
         <div className="text-xs text-muted-foreground mt-1">
           {rows?.length ?? 0} employees · {year}-{String(month).padStart(2, "0")}
@@ -2556,9 +2557,9 @@ function AdminPayroll() {
                     <td className="p-2 truncate max-w-[160px]">{r.profiles?.full_name ?? r.profiles?.email ?? "—"}</td>
                     <td className="p-2 text-right font-mono text-xs">{Number(r.worked_hours).toFixed(1)}h</td>
                     <td className="p-2 text-right font-mono text-xs">{Number(r.expected_hours).toFixed(0)}h</td>
-                    <td className="p-2 text-right font-mono text-xs">{Number(r.prorated_amount).toFixed(2)}</td>
-                    <td className="p-2 text-right font-mono text-xs">{Number(r.overtime_amount).toFixed(2)}</td>
-                    <td className="p-2 text-right font-mono font-semibold">{r.currency} {final.toFixed(2)}</td>
+                    <td className="p-2 text-right font-mono text-xs">{formatINR(Number(r.prorated_amount))}</td>
+                    <td className="p-2 text-right font-mono text-xs">{formatINR(Number(r.overtime_amount))}</td>
+                    <td className="p-2 text-right font-mono font-semibold">{formatINR(final)}</td>
                     <td className="p-2 text-right">
                       <Badge variant={r.status === "finalized" ? "default" : "secondary"} className="text-[10px]">
                         {r.status}
@@ -2611,7 +2612,7 @@ function AdminPayroll() {
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-xs">Override amount ({overrideRow?.currency})</Label>
+              <Label className="text-xs">Override amount (INR)</Label>
               <Input type="number" value={overrideVal} onChange={(e) => setOverrideVal(e.target.value)} />
             </div>
             <div className="space-y-1.5">
