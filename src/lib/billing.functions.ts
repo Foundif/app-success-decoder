@@ -209,7 +209,7 @@ export const getBillingStatus = createServerFn({ method: "GET" })
       .select("id,name,plan,subscription_status,trial_ends_at,current_period_end")
       .eq("id", prof.company_id)
       .single();
-    if (!c) return null;
+    if (!c) return { companyId: prof.company_id, companyName: null, plan: null, status: null, trialEndsAt: null, currentPeriodEnd: null, isActive: false, isReadonly: true, daysLeft: 0 };
     const now = Date.now();
     const trialEnd = c.trial_ends_at ? new Date(c.trial_ends_at).getTime() : 0;
     const periodEnd = c.current_period_end ? new Date(c.current_period_end).getTime() : 0;
