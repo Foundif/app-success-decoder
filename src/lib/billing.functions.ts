@@ -192,7 +192,18 @@ export const getBillingStatus = createServerFn({ method: "GET" })
     const { supabase, userId } = context;
     const { data: prof } = await supabase
       .from("profiles").select("company_id").eq("id", userId).maybeSingle();
-    if (!prof?.company_id) return null;
+    if (!prof?.company_id)
+      return {
+        companyId: null,
+        companyName: null,
+        plan: null,
+        status: null,
+        trialEndsAt: null,
+        currentPeriodEnd: null,
+        isActive: false,
+        isReadonly: true,
+        daysLeft: 0,
+      };
     const { data: c } = await supabase
       .from("companies")
       .select("id,name,plan,subscription_status,trial_ends_at,current_period_end")
