@@ -80,15 +80,9 @@ function PricingPage() {
     if (user) status().then(setBilling).catch(() => {});
   }, [user]);
 
-  // Default seat count to current team size for nicer UX
-  useEffect(() => {
-    if (!companyId) return;
-    supabase
-      .from("profiles")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", companyId)
-      .then(({ count }) => setSeats(Math.max(1, count ?? 1)));
-  }, [companyId]);
+  // Seats default to 1 — admin can adjust. (Auto-count was misleading when
+  // the company had old/test profiles around.)
+
 
   function priceFor(p: Plan) {
     if (p.contact_only) return null;
@@ -290,7 +284,10 @@ function PricingPage() {
               const isCurrent = billing?.plan === p.id && billing.isActive;
               const isHighlight = p.id === "growth";
               const unit = priceFor(p);
-              const total = unit != null ? unit * seats : null;
+              const cap = p.max_staff ?? Infinity;
+              const overCap = seats > cap;
+              const effectiveSeats = Math.min(seats, cap === Infinity ? seats : cap);
+              const total = unit != null ? unit * effectiveSeats : null;
               return (
                 <Card
                   key={p.id}
@@ -327,15 +324,23 @@ function PricingPage() {
                   </p>
                   {!p.contact_only && total != null && (
                     <p className="text-[11px] text-muted-foreground mt-1">
-                      {seats} user{seats === 1 ? "" : "s"} ={" "}
-                      <strong className="text-foreground">{formatINR(total)}</strong>/
-                      {cycle === "monthly" ? "mo" : "yr"}
+                      {overCap ? (
+                        <span className="text-destructive">
+                          Exceeds {p.max_staff} staff cap — choose a higher plan
+                        </span>
+                      ) : (
+                        <>
+                          {effectiveSeats} user{effectiveSeats === 1 ? "" : "s"} ={" "}
+                          <strong className="text-foreground">{formatINR(total)}</strong>/
+                          {cycle === "monthly" ? "mo" : "yr"}
+                        </>
+                      )}
                     </p>
                   )}
                   <Button
                     className="mt-4 w-full"
                     variant={isHighlight ? "default" : "outline"}
-                    disabled={busyId === p.id || isCurrent}
+                    disabled={busyId === p.id || isCurrent || overCap}
                     onClick={() => subscribe(p)}
                   >
                     {busyId === p.id ? (
@@ -354,6 +359,7 @@ function PricingPage() {
               );
             })}
           </div>
+
 
           {/* Feature comparison */}
           {plans.length > 0 && (

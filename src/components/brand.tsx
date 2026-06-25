@@ -1,19 +1,20 @@
 import { useEffect, useState } from "react";
 import logoAsset from "@/assets/tilltask-logo.png.asset.json";
+import markAsset from "@/assets/tilltask-mark.png.asset.json";
 
 export const LOGO_URL = logoAsset.url;
+export const MARK_URL = markAsset.url;
 
 /** Square orange "T" mark only — use in tight headers and avatars. */
 export function BrandMark({ className = "w-10 h-10" }: { className?: string }) {
   return (
     <div
-      className={`${className} rounded-2xl bg-white shadow-sm border border-border/60 grid place-items-center overflow-hidden shrink-0`}
+      className={`${className} rounded-xl bg-background grid place-items-center overflow-hidden shrink-0`}
     >
       <img
-        src={LOGO_URL}
+        src={MARK_URL}
         alt="TillTask"
-        className="w-[180%] h-[180%] object-cover object-left scale-100"
-        style={{ objectPosition: "5% center" }}
+        className="w-full h-full object-contain"
         draggable={false}
       />
     </div>
