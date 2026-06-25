@@ -1,16 +1,6 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
-import {
-  LayoutDashboard,
-  UserCircle,
-  DollarSign,
-  LogOut,
-  Crown,
-  Sparkles,
-  Menu,
-  X,
-  Building2,
-} from "lucide-react";
+import { LogOut, Crown, Sparkles } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -23,28 +13,18 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
 import { usePlan } from "@/lib/usePlan";
 import { BrandLockup } from "@/components/brand";
+import { visibleNav, setPendingTab, planDisplay } from "@/lib/nav-items";
 
 /** Double-line hamburger button that opens the full menu drawer on mobile. */
 export function MobileMenuTrigger({ children }: { children?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
-  const { profile, signOut, primaryRole, companyId } = useAuth();
+  const { profile, signOut, primaryRole } = useAuth();
   const plan = usePlan();
   const isAdmin = primaryRole !== "employee" && !!primaryRole;
+  const items = visibleNav(primaryRole, plan);
+  const { label: planLabel, sublabel: planSub } = planDisplay(plan);
 
-  const items = [
-    { label: "Dashboard", icon: LayoutDashboard, to: "/" as const },
-    { label: "My profile", icon: UserCircle, to: "/profile" as const },
-    ...(isAdmin
-      ? [{ label: "Pricing & plan", icon: DollarSign, to: "/pricing" as const }]
-      : []),
-  ];
-
-  const planLabel = plan.tier
-    ? plan.tier.charAt(0).toUpperCase() + plan.tier.slice(1)
-    : plan.status === "trial"
-      ? "Trial"
-      : "Free";
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
