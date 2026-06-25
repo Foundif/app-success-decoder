@@ -1,40 +1,21 @@
-import { useNavigate } from "@tanstack/react-router";
-import {
-  LayoutDashboard,
-  DollarSign,
-  UserCircle,
-  LogOut,
-  Crown,
-  Sparkles,
-} from "lucide-react";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { LogOut, Crown, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { usePlan } from "@/lib/usePlan";
 import { BrandLockup } from "@/components/brand";
 import { MobileMenuTrigger } from "@/components/mobile-menu";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
+import { visibleNav, setPendingTab, planDisplay, type AppTab } from "@/lib/nav-items";
 
-type Item = { label: string; icon: React.ElementType; to: string; adminOnly?: boolean };
-
-export function SideNav({ active }: { active: "home" | "pricing" | "profile" | null }) {
+export function SideNav({ active }: { active: AppTab | null }) {
   const navigate = useNavigate();
   const { profile, signOut, primaryRole } = useAuth();
   const plan = usePlan();
   const isAdmin = primaryRole !== "employee" && primaryRole !== null;
   const roleLabel = isAdmin ? "Business Operations" : "Team Member";
-
-  const items: Item[] = [
-    { label: "Dashboard", icon: LayoutDashboard, to: "/" },
-    { label: "Profile", icon: UserCircle, to: "/profile" },
-    { label: "Pricing", icon: DollarSign, to: "/pricing", adminOnly: true },
-  ];
-  const visible = items.filter((i) => !i.adminOnly || isAdmin);
-
-  const planLabel = plan.tier
-    ? plan.tier.charAt(0).toUpperCase() + plan.tier.slice(1)
-    : plan.status === "trial"
-      ? "Trial"
-      : "Free";
+  const items = visibleNav(primaryRole, plan);
+  const { label: planLabel, sublabel: planSub } = planDisplay(plan);
 
   return (
     <aside className="hidden lg:flex w-72 shrink-0 border-r bg-card flex-col sticky top-0 h-screen">
@@ -47,16 +28,16 @@ export function SideNav({ active }: { active: "home" | "pricing" | "profile" | n
         </div>
       </div>
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-        {visible.map((it) => {
+        {items.map((it) => {
           const Icon = it.icon;
-          const isActive =
-            (it.to === "/" && active === "home") ||
-            (it.to === "/pricing" && active === "pricing") ||
-            (it.to === "/profile" && active === "profile");
+          const isActive = active === it.id;
           return (
             <button
-              key={it.to}
-              onClick={() => navigate({ to: it.to })}
+              key={it.id}
+              onClick={() => {
+                if (it.tab) setPendingTab(it.tab);
+                navigate({ to: it.to });
+              }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[15px] font-medium transition-colors ${
                 isActive
                   ? "bg-muted text-foreground"
@@ -80,16 +61,12 @@ export function SideNav({ active }: { active: "home" | "pricing" | "profile" | n
                   }`}
                 />
                 <Crown className="w-4 h-4 text-primary" />
-                <span>{planLabel} plan</span>
+                <span>{planLabel}</span>
               </div>
-              {plan.status === "trial" && (
-                <span className="text-[10px] text-muted-foreground font-medium">
-                  {plan.daysLeft}d left
-                </span>
-              )}
+              <span className="text-[10px] text-muted-foreground font-medium">{planSub}</span>
             </div>
             <div className="text-xs text-muted-foreground truncate">{profile?.email}</div>
-            {(plan.readonly || !plan.tier) && (
+            {(plan.readonly || !plan.tier || plan.status === "trial") && (
               <button
                 onClick={() => navigate({ to: "/pricing" })}
                 className="w-full flex items-center justify-center gap-1.5 bg-foreground text-background rounded-xl py-2.5 text-sm font-semibold hover:opacity-90 transition"
@@ -113,17 +90,11 @@ export function SideNav({ active }: { active: "home" | "pricing" | "profile" | n
   );
 }
 
-/**
- * Layout shell for non-Home pages (Profile, Pricing). Provides:
- *  - desktop left sidebar
- *  - mobile header with hamburger + brand
- *  - mobile bottom nav so users keep app navigation away from /
- */
 export function SecondaryShell({
   active,
   children,
 }: {
-  active: "pricing" | "profile";
+  active: AppTab;
   children: ReactNode;
 }) {
   return (
@@ -141,7 +112,7 @@ export function SecondaryShell({
         </header>
         {children}
       </div>
-      <MobileBottomNav />
+      <MobileBottomNav activeTab={active} />
     </div>
   );
 }
