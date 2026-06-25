@@ -72,7 +72,7 @@ export function MobileMenuTrigger({ children }: { children?: ReactNode }) {
                   {planSub}
                 </span>
               </div>
-              <div className="text-sm font-semibold mt-0.5">{planLabel}</div>
+              <div className="text-xs text-muted-foreground mt-1 truncate">{profile?.email}</div>
               {(plan.readonly || !plan.tier || plan.status === "trial") && (
                 <button
                   onClick={() => {
