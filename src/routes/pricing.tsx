@@ -80,15 +80,9 @@ function PricingPage() {
     if (user) status().then(setBilling).catch(() => {});
   }, [user]);
 
-  // Default seat count to current team size for nicer UX
-  useEffect(() => {
-    if (!companyId) return;
-    supabase
-      .from("profiles")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", companyId)
-      .then(({ count }) => setSeats(Math.max(1, count ?? 1)));
-  }, [companyId]);
+  // Seats default to 1 — admin can adjust. (Auto-count was misleading when
+  // the company had old/test profiles around.)
+
 
   function priceFor(p: Plan) {
     if (p.contact_only) return null;
