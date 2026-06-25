@@ -190,14 +190,9 @@ function AppShell({ role }: { role: AppRole }) {
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex w-72 shrink-0 border-r bg-card flex-col sticky top-0 h-screen">
         <div className="flex items-center gap-3 px-5 py-5 border-b">
-          <div className="w-11 h-11 rounded-2xl bg-foreground flex items-center justify-center shadow-sm">
-            <Briefcase className="w-5 h-5 text-background" />
-          </div>
-          <div className="min-w-0">
-            <div className="font-bold text-lg leading-tight truncate">TillTask</div>
-            <div className="text-[10px] tracking-widest uppercase text-muted-foreground font-semibold truncate">
-              {roleLabel}
-            </div>
+          <BrandLockup className="h-8" />
+          <div className="ml-auto text-[10px] tracking-widest uppercase text-muted-foreground font-semibold text-right">
+            {roleLabel}
           </div>
         </div>
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
@@ -270,14 +265,13 @@ function AppShell({ role }: { role: AppRole }) {
 
       <div className="flex-1 min-w-0 pb-24 lg:pb-0">
         <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b lg:border-b">
-          <div className="max-w-screen-xl mx-auto px-4 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-2 lg:hidden">
-              <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
-                <Briefcase className="w-4 h-4 text-primary-foreground" />
-              </div>
-              <div>
-                <div className="font-bold leading-none">TillTask</div>
-                <div className="text-xs text-muted-foreground capitalize">
+          <div className="max-w-screen-xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 lg:hidden min-w-0">
+              <MobileMenuTrigger />
+              <BrandMark className="w-9 h-9 rounded-xl" />
+              <div className="min-w-0">
+                <div className="font-bold leading-none truncate">TillTask</div>
+                <div className="text-xs text-muted-foreground capitalize truncate">
                   {role.replace("_", " ")}
                 </div>
               </div>
