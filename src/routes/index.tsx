@@ -167,23 +167,31 @@ function AppShell({ role }: { role: AppRole }) {
   const navigate = useNavigate();
   const plan = usePlan();
   const isAdmin = role !== "employee";
+  const navItems = visibleNav(role, plan);
+  const homeTabs = navItems.filter((i) => i.to === "/");
+  const { label: planLabel, sublabel: planSub } = planDisplay(plan);
 
-  const allTabs: { id: Tab; label: string; icon: React.ElementType; allow: AppRole[]; gate?: boolean }[] = [
-    { id: "home", label: "Home", icon: LayoutDashboard, allow: ["super_admin", "company_admin", "employee"] },
-    { id: "team", label: "Team", icon: Users, allow: ["super_admin", "company_admin"] },
-    { id: "screens", label: "Screens", icon: Camera, allow: ["super_admin", "company_admin", "employee"] },
-    { id: "payroll", label: "Payroll", icon: DollarSign, allow: ["super_admin", "company_admin", "employee"], gate: plan.payroll },
-    { id: "reports", label: "Reports", icon: BarChart3, allow: ["super_admin", "company_admin"], gate: plan.advancedReports },
-    { id: "profile", label: "Profile", icon: UserCircle, allow: ["super_admin", "company_admin", "employee"] },
-  ];
-  const tabs = allTabs.filter((t) => t.allow.includes(role) && (t.gate === undefined || t.gate));
+  // Pick up tab pushed by side nav / drawer / bottom nav
+  useEffect(() => {
+    const t = consumePendingTab();
+    if (t && ["home", "team", "screens", "payroll", "reports"].includes(t)) {
+      setTab(t as Tab);
+    }
+    // Re-check whenever route lands on /
+    const handler = () => {
+      const v = consumePendingTab();
+      if (v) setTab(v as Tab);
+    };
+    window.addEventListener("focus", handler);
+    return () => window.removeEventListener("focus", handler);
+  }, []);
 
-  function handleTab(id: Tab) {
-    if (id === "profile") {
-      navigate({ to: "/profile" });
+  function go(item: (typeof navItems)[number]) {
+    if (item.to !== "/") {
+      navigate({ to: item.to });
       return;
     }
-    setTab(id);
+    setTab((item.tab ?? "home") as Tab);
   }
 
   const roleLabel = isAdmin ? "Business Operations" : "Team Member";
@@ -199,13 +207,13 @@ function AppShell({ role }: { role: AppRole }) {
           </div>
         </div>
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            const active = tab === t.id;
+          {navItems.map((it) => {
+            const Icon = it.icon;
+            const active = it.to === "/" ? tab === it.tab : false;
             return (
               <button
-                key={t.id}
-                onClick={() => handleTab(t.id)}
+                key={it.id}
+                onClick={() => go(it)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[15px] font-medium transition-colors ${
                   active
                     ? "bg-muted text-foreground"
@@ -213,43 +221,35 @@ function AppShell({ role }: { role: AppRole }) {
                 }`}
               >
                 <Icon className="w-5 h-5 shrink-0" />
-                <span className="truncate">{t.label}</span>
+                <span className="truncate">{it.label}</span>
               </button>
             );
           })}
-          {isAdmin && (
-            <button
-              onClick={() => navigate({ to: "/pricing" })}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[15px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-            >
-              <DollarSign className="w-5 h-5 shrink-0" />
-              Pricing
-            </button>
-          )}
         </nav>
         <div className="p-3 border-t space-y-3">
           {isAdmin && (
             <div className="rounded-2xl border bg-muted/50 p-3 space-y-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-sm font-semibold capitalize">
+                <div className="flex items-center gap-1.5 text-sm font-semibold">
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      plan.isActive ? "bg-success" : "bg-destructive"
+                    }`}
+                  />
                   <DollarSign className="w-4 h-4 text-primary" />
-                  {plan.tier ?? (plan.status === "trial" ? "Trial" : "Free")}
+                  {planLabel}
                 </div>
-                {plan.status === "trial" && (
-                  <span className="text-[10px] text-muted-foreground font-medium">
-                    {plan.daysLeft}d left
-                  </span>
-                )}
+                <span className="text-[10px] text-muted-foreground font-medium">{planSub}</span>
               </div>
               <div className="text-xs text-muted-foreground truncate">
                 {profile?.full_name ?? profile?.email}
               </div>
-              {(plan.readonly || !plan.tier) && (
+              {(plan.readonly || !plan.tier || plan.status === "trial") && (
                 <button
                   onClick={() => navigate({ to: "/pricing" })}
                   className="w-full bg-foreground text-background rounded-xl py-2.5 text-sm font-semibold hover:opacity-90 transition"
                 >
-                  Upgrade to Pro
+                  Upgrade plan
                 </button>
               )}
             </div>
@@ -271,7 +271,7 @@ function AppShell({ role }: { role: AppRole }) {
           <div className="max-w-screen-xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 lg:hidden min-w-0">
               <MobileMenuTrigger />
-              <BrandMark className="w-9 h-9 rounded-xl" />
+              <BrandMark className="w-9 h-9" />
               <div className="min-w-0">
                 <div className="font-bold leading-none truncate">TillTask</div>
                 <div className="text-xs text-muted-foreground capitalize truncate">
@@ -284,6 +284,11 @@ function AppShell({ role }: { role: AppRole }) {
               {plan.readonly && (
                 <Badge variant="destructive" className="hidden sm:inline-flex text-[10px]">
                   Trial ended — read-only
+                </Badge>
+              )}
+              {plan.status === "trial" && plan.isActive && (
+                <Badge variant="secondary" className="hidden sm:inline-flex text-[10px]">
+                  Free Trial · {plan.daysLeft}d
                 </Badge>
               )}
               {isAdmin && companyId && <AlertsBell companyId={companyId} />}
@@ -320,30 +325,41 @@ function AppShell({ role }: { role: AppRole }) {
         </main>
       </div>
 
-      {/* Mobile bottom nav */}
+      {/* Mobile bottom nav (home tabs only — full menu in drawer) */}
       <nav className="fixed bottom-0 inset-x-0 bg-card border-t z-10 lg:hidden">
-        <div className="max-w-screen-xl mx-auto grid" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0,1fr))` }}>
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            const active = tab === t.id;
+        <div
+          className="max-w-screen-xl mx-auto grid"
+          style={{ gridTemplateColumns: `repeat(${Math.min(homeTabs.length + 1, 6)}, minmax(0,1fr))` }}
+        >
+          {homeTabs.map((it) => {
+            const Icon = it.icon;
+            const active = tab === it.tab;
             return (
               <button
-                key={t.id}
-                onClick={() => handleTab(t.id)}
+                key={it.id}
+                onClick={() => setTab(it.tab as Tab)}
                 className={`flex flex-col items-center gap-1 py-3 text-xs ${
                   active ? "text-primary" : "text-muted-foreground"
                 }`}
               >
                 <Icon className="w-5 h-5" />
-                {t.label}
+                {it.label}
               </button>
             );
           })}
+          <button
+            onClick={() => navigate({ to: "/profile" })}
+            className="flex flex-col items-center gap-1 py-3 text-xs text-muted-foreground"
+          >
+            <UserCircle className="w-5 h-5" />
+            Profile
+          </button>
         </div>
       </nav>
     </div>
   );
 }
+
 
 // =================== HOME TAB ===================
 function HomeTab({ role }: { role: AppRole }) {
