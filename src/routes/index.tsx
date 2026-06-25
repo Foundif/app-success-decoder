@@ -94,6 +94,7 @@ import { usePlan } from "@/lib/usePlan";
 import { formatINR } from "@/lib/format";
 import { BrandLockup, BrandMark } from "@/components/brand";
 import { MobileMenuTrigger } from "@/components/mobile-menu";
+import { visibleNav, consumePendingTab, setPendingTab, planDisplay, type AppTab } from "@/lib/nav-items";
 
 export const Route = createFileRoute("/")({
   head: () => ({
