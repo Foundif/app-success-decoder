@@ -92,6 +92,8 @@ import {
 import { CaptureSession } from "@/lib/capture";
 import { usePlan } from "@/lib/usePlan";
 import { formatINR } from "@/lib/format";
+import { BrandLockup, BrandMark } from "@/components/brand";
+import { MobileMenuTrigger } from "@/components/mobile-menu";
 
 export const Route = createFileRoute("/")({
   head: () => ({
