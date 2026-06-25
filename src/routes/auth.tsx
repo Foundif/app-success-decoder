@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   LogIn,
 } from "lucide-react";
+import { BrandLockup } from "@/components/brand";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
