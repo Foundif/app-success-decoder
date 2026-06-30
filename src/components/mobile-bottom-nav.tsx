@@ -14,8 +14,8 @@ export function MobileBottomNav({ activeTab }: { activeTab?: AppTab } = {}) {
   const plan = usePlan();
 
   const all = visibleNav(primaryRole, plan);
-  // Keep at most 5 to fit on a phone — drop pricing (lives in side drawer)
-  const items = all.filter((i) => i.id !== "pricing").slice(0, 5);
+  // 6 slots: Home, Team, Screens, Payroll, Reports, Profile. Pricing lives in the side drawer.
+  const items = all.filter((i) => i.id !== "pricing").slice(0, 6);
 
   return (
     <nav className="fixed bottom-0 inset-x-0 bg-card border-t z-20 lg:hidden">

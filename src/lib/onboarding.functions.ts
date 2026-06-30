@@ -92,8 +92,9 @@ export const generateInviteCodes = createServerFn({ method: "POST" })
     // Enforce staff cap based on the company's current plan
     const { data: co } = await supabaseAdmin
       .from("companies").select("plan").eq("id", data.companyId).maybeSingle();
-    const planLimits: Record<string, number> = { starter: 5, growth: 25, business: 0 };
-    const limit = co?.plan ? (planLimits[co.plan] ?? 0) : 5; // default cap = starter while no plan
+    const planLimits: Record<string, number> = { starter: 10, growth: 50, scale: 200, enterprise: 0 };
+    // Trial / unset plan gets growth-level cap so onboarding doesn't artificially block invites.
+    const limit = co?.plan ? (planLimits[co.plan] ?? 0) : 50;
     if (limit > 0) {
       const [{ count: existingStaff }, { count: pendingInvites }] = await Promise.all([
         supabaseAdmin.from("profiles").select("id", { count: "exact", head: true }).eq("company_id", data.companyId),

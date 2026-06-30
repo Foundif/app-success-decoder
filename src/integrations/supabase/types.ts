@@ -255,6 +255,7 @@ export type Database = {
       companies: {
         Row: {
           address: string | null
+          allowed_apps: Json
           brand_color: string | null
           city: string | null
           created_at: string
@@ -265,6 +266,7 @@ export type Database = {
           industry: string | null
           invite_code: string
           logo_url: string | null
+          monitoring_enabled: boolean
           name: string
           onboarded: boolean
           owner_id: string | null
@@ -286,6 +288,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          allowed_apps?: Json
           brand_color?: string | null
           city?: string | null
           created_at?: string
@@ -296,6 +299,7 @@ export type Database = {
           industry?: string | null
           invite_code: string
           logo_url?: string | null
+          monitoring_enabled?: boolean
           name: string
           onboarded?: boolean
           owner_id?: string | null
@@ -317,6 +321,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          allowed_apps?: Json
           brand_color?: string | null
           city?: string | null
           created_at?: string
@@ -327,6 +332,7 @@ export type Database = {
           industry?: string | null
           invite_code?: string
           logo_url?: string | null
+          monitoring_enabled?: boolean
           name?: string
           onboarded?: boolean
           owner_id?: string | null
