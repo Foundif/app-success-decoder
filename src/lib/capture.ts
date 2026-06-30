@@ -136,6 +136,7 @@ export class CaptureSession {
   }
 
   // ============ snapshots ============
+  private snapCount = 0;
   private async snapshot() {
     if (!this.stream || this.video.videoWidth === 0) return;
     const vw = this.video.videoWidth;
@@ -162,18 +163,40 @@ export class CaptureSession {
       console.warn("snapshot upload failed", error.message);
       return;
     }
-    const { data: signed } = await supabase.storage
-      .from("recordings")
-      .createSignedUrl(path, 60 * 60 * 24 * 7);
+    // Store the STORAGE PATH (not a 7-day signed URL). The viewer signs on demand,
+    // so screenshots keep loading after any deployment / past expiry.
     await supabase.from("screenshots").insert({
       user_id: this.opts.userId,
       company_id: this.opts.companyId,
       captured_at: new Date(ts).toISOString(),
-      image_url: signed?.signedUrl ?? path,
+      image_url: path,
       activity_label: document.title?.slice(0, 60) ?? null,
       app_name: "Browser",
       status: "pending",
     });
+
+    // Run AI distraction check on roughly every 6th snapshot (~1 per minute)
+    this.snapCount++;
+    if (this.snapCount % 6 === 1) {
+      this.runAiCheck(blob).catch(() => {});
+    }
+  }
+
+  private async runAiCheck(blob: Blob) {
+    try {
+      const b64 = await blobToBase64(blob);
+      const { analyzeSnapshot } = await import("@/lib/monitoring.functions");
+      await analyzeSnapshot({
+        data: {
+          companyId: this.opts.companyId,
+          attendanceId: this.opts.attendanceId ?? null,
+          imageBase64: b64,
+          mime: "image/webp",
+        },
+      });
+    } catch (e) {
+      // silent — AI is best-effort
+    }
   }
 
   // ============ alerts ============
