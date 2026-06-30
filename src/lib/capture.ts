@@ -310,3 +310,17 @@ export class CaptureSession {
     this.opts.onAlert?.("info", "Sent requested clip to admin");
   }
 }
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onloadend = () => {
+      const s = String(r.result ?? "");
+      // strip data:...;base64, prefix
+      const i = s.indexOf(",");
+      resolve(i >= 0 ? s.slice(i + 1) : s);
+    };
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
