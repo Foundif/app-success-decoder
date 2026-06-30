@@ -765,6 +765,7 @@ function TeamTab() {
         <TabsTrigger value="attendance"><Clock className="w-3.5 h-3.5" /> Attendance</TabsTrigger>
         <TabsTrigger value="clips"><Video className="w-3.5 h-3.5" /> Clips</TabsTrigger>
         <TabsTrigger value="invites"><KeyRound className="w-3.5 h-3.5" /> Invites</TabsTrigger>
+        <TabsTrigger value="monitoring"><Shield className="w-3.5 h-3.5" /> Monitoring</TabsTrigger>
       </TabsList>
 
       <TabsContent value="members" className="space-y-5">
@@ -790,6 +791,10 @@ function TeamTab() {
 
       <TabsContent value="clips">
         <ClipsPanel scope="admin" />
+      </TabsContent>
+
+      <TabsContent value="monitoring">
+        <MonitoringSettingsCard />
       </TabsContent>
 
       <TabsContent value="invites" className="space-y-5">
