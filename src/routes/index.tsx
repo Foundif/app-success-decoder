@@ -421,6 +421,7 @@ function AdminHome() {
 
   return (
     <div className="space-y-5">
+      <TrialBanner />
       {company && (
         <Card className="p-4 bg-gradient-to-br from-primary/10 to-accent/30 border-primary/20">
           <div className="flex items-center justify-between">
