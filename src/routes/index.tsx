@@ -2722,3 +2722,28 @@ function EmployeePayroll() {
   );
 }
 
+
+// Re-sign storage paths on demand so screenshots survive past the
+// 7-day signed URL limit and don't show as broken images after redeploys.
+function ScreenshotImage({ src }: { src: string | null | undefined }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!src) return;
+      if (/^https?:/.test(src)) {
+        setUrl(src);
+        return;
+      }
+      const { data } = await supabase.storage
+        .from("recordings")
+        .createSignedUrl(src, 3600);
+      if (!cancelled) setUrl(data?.signedUrl ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [src]);
+  if (!url) return <Camera className="w-8 h-8 text-muted-foreground" />;
+  return <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />;
+}
