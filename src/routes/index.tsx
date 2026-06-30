@@ -974,11 +974,7 @@ function ScreensTab({ role }: { role: AppRole }) {
         {screens?.map((s) => (
           <Card key={s.id} className="p-3 flex flex-col">
             <div className="aspect-video rounded bg-muted flex items-center justify-center mb-2 overflow-hidden">
-              {s.image_url ? (
-                <img src={s.image_url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <Camera className="w-8 h-8 text-muted-foreground" />
-              )}
+              <ScreenshotImage src={s.image_url} />
             </div>
             <div className="flex items-center justify-between mb-1">
               <div className="text-xs font-medium truncate">
