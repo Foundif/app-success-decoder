@@ -2753,3 +2753,143 @@ function ScreenshotImage({ src }: { src: string | null | undefined }) {
   if (!url) return <Camera className="w-8 h-8 text-muted-foreground" />;
   return <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />;
 }
+
+// ===== Trial progress banner =====
+function TrialBanner() {
+  const plan = usePlan();
+  const navigate = useNavigate();
+  if (plan.status !== "trial" || !plan.isActive) return null;
+  const TOTAL = 14;
+  const used = Math.max(0, TOTAL - plan.daysLeft);
+  const pct = Math.min(100, Math.round((used / TOTAL) * 100));
+  return (
+    <Card className="p-4 border-primary/30 bg-primary/5">
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <div>
+          <div className="text-sm font-semibold">Free trial · {plan.daysLeft} day{plan.daysLeft === 1 ? "" : "s"} left</div>
+          <div className="text-xs text-muted-foreground">All features unlocked for 14 days. Subscribe to keep your team productive.</div>
+        </div>
+        <Button size="sm" onClick={() => navigate({ to: "/pricing" })}>Upgrade</Button>
+      </div>
+      <div className="h-2 rounded-full bg-muted overflow-hidden">
+        <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+      </div>
+      <div className="text-[10px] text-muted-foreground mt-1">{used}/{TOTAL} days used</div>
+    </Card>
+  );
+}
+
+// ===== Monitoring settings (admin) =====
+function MonitoringSettingsCard() {
+  const { companyId } = useAuth();
+  const qc = useQueryClient();
+  const { data: co, refetch } = useQuery({
+    enabled: !!companyId,
+    queryKey: ["co-monitoring", companyId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("companies")
+        .select("monitoring_enabled, allowed_apps")
+        .eq("id", companyId!)
+        .maybeSingle();
+      return data;
+    },
+  });
+  const [enabled, setEnabled] = useState<boolean>(true);
+  const [items, setItems] = useState<Array<{ label: string; url: string }>>([]);
+  const [label, setLabel] = useState("");
+  const [url, setUrl] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!co) return;
+    setEnabled(!!co.monitoring_enabled);
+    setItems(((co.allowed_apps as any) ?? []) as Array<{ label: string; url: string }>);
+  }, [co]);
+
+  async function save(next?: { enabled?: boolean; items?: Array<{ label: string; url: string }> }) {
+    if (!companyId) return;
+    setSaving(true);
+    try {
+      const { updateMonitoringSettings } = await import("@/lib/monitoring.functions");
+      await updateMonitoringSettings({
+        data: {
+          companyId,
+          monitoringEnabled: next?.enabled ?? enabled,
+          allowedApps: next?.items ?? items,
+        },
+      });
+      await refetch();
+      qc.invalidateQueries({ queryKey: ["alerts"] });
+      toast.success("Settings saved");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card className="p-4 space-y-5">
+      <div>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold flex items-center gap-2"><Shield className="w-4 h-4 text-primary" /> AI distraction detection</h2>
+            <p className="text-xs text-muted-foreground mt-1">When staff screens show YouTube, gaming, social or other off-task content, alert the business owner instantly.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => { setEnabled(!enabled); save({ enabled: !enabled }); }}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${enabled ? "bg-primary" : "bg-muted"}`}
+          >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${enabled ? "translate-x-5" : "translate-x-0.5"}`} />
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <h3 className="text-sm font-semibold">Allowed apps & websites</h3>
+          <p className="text-xs text-muted-foreground">Add the tools your team should be on (WhatsApp Web, your admin panel, internal CRMs). Anything else flagged as non-work triggers an alert.</p>
+        </div>
+        <div className="grid sm:grid-cols-[1fr_1fr_auto] gap-2">
+          <Input placeholder="Label e.g. WhatsApp Web" value={label} onChange={(e) => setLabel(e.target.value)} />
+          <Input placeholder="https://web.whatsapp.com" value={url} onChange={(e) => setUrl(e.target.value)} />
+          <Button
+            disabled={!label.trim() || !url.trim() || saving}
+            onClick={() => {
+              const next = [...items, { label: label.trim(), url: url.trim() }];
+              setItems(next);
+              setLabel(""); setUrl("");
+              save({ items: next });
+            }}
+          >
+            Add
+          </Button>
+        </div>
+        <div className="space-y-1.5">
+          {items.length === 0 && <p className="text-xs text-muted-foreground">No allowed apps yet — AI will flag any non-work content.</p>}
+          {items.map((it, i) => (
+            <div key={i} className="flex items-center justify-between gap-2 p-2 rounded bg-muted text-sm">
+              <div className="min-w-0">
+                <div className="font-medium truncate">{it.label}</div>
+                <div className="text-xs text-muted-foreground truncate">{it.url}</div>
+              </div>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => {
+                  const next = items.filter((_, j) => j !== i);
+                  setItems(next);
+                  save({ items: next });
+                }}
+              >
+                <XCircle className="w-4 h-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Card>
+  );
+}
