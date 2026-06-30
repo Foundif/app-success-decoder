@@ -127,13 +127,16 @@ export const updateMonitoringSettings = createServerFn({ method: "POST" })
     });
     if (!isAdmin) throw new Error("Forbidden");
 
-    const patch: Record<string, unknown> = {};
+    const patch: { monitoring_enabled?: boolean; allowed_apps?: any } = {};
     if (typeof data.monitoringEnabled === "boolean")
       patch.monitoring_enabled = data.monitoringEnabled;
     if (data.allowedApps) patch.allowed_apps = data.allowedApps;
     if (Object.keys(patch).length === 0) return { ok: true };
 
-    const { error } = await supabaseAdmin.from("companies").update(patch).eq("id", data.companyId);
+    const { error } = await supabaseAdmin
+      .from("companies")
+      .update(patch as any)
+      .eq("id", data.companyId);
     if (error) throw new Error(error.message);
 
     await supabaseAdmin.from("audit_logs").insert({
@@ -142,7 +145,7 @@ export const updateMonitoringSettings = createServerFn({ method: "POST" })
       action: "monitoring.settings_updated",
       entity_type: "company",
       entity_id: data.companyId,
-      metadata: patch,
+      metadata: patch as any,
     });
     return { ok: true };
   });
