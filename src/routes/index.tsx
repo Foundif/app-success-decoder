@@ -1,10 +1,9 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
-  LayoutDashboard,
   Users,
   Camera,
   BarChart3,
@@ -48,7 +47,6 @@ import {
   DialogTitle,
   DialogFooter,
   DialogDescription,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Sheet,
@@ -89,12 +87,12 @@ import {
   requestClip,
   resolveAlert,
 } from "@/lib/workforce.functions";
+import { updateMonitoringSettings } from "@/lib/monitoring.functions";
 import { CaptureSession } from "@/lib/capture";
 import { usePlan } from "@/lib/usePlan";
-import { formatINR } from "@/lib/format";
-import { BrandLockup, BrandMark } from "@/components/brand";
+import { BrandLockup } from "@/components/brand";
 import { MobileMenuTrigger } from "@/components/mobile-menu";
-import { visibleNav, consumePendingTab, setPendingTab, planDisplay, type AppTab } from "@/lib/nav-items";
+import { visibleNav, consumePendingTab, planDisplay } from "@/lib/nav-items";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -108,6 +106,55 @@ export const Route = createFileRoute("/")({
   }),
   component: HomeGate,
 });
+
+// =================== HELPERS ===================
+
+/** Local (not UTC) YYYY-MM-DD. `toISOString()` returns the UTC date and files
+ *  work done after midnight (e.g. 00:00–05:30 in India) under the wrong day. */
+function localDateStr(d: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function daysAgoLocal(days: number): string {
+  return localDateStr(new Date(Date.now() - days * 86400000));
+}
+
+/** Parse "YYYY-MM-DD" as a LOCAL date (new Date("YYYY-MM-DD") parses as UTC). */
+function parseLocalDate(s: string): Date {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1);
+}
+
+function formatMoney(amount: number, currency = "INR"): string {
+  try {
+    return new Intl.NumberFormat(currency === "INR" ? "en-IN" : undefined, {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return `${currency} ${amount.toFixed(2)}`;
+  }
+}
+
+/** One shared formula so Home and Drill-down agree. Expects ~45 min break / day. */
+function calcBreakAdherence(breakMinutes: number, days: number): number {
+  const expected = days * 45;
+  if (expected === 0) return 100;
+  return Math.max(0, 100 - Math.round((Math.abs(breakMinutes - expected) / expected) * 100));
+}
+
+const fmtHMS = (s: number) => {
+  const t = Math.max(0, Math.floor(s));
+  return `${String(Math.floor(t / 3600)).padStart(2, "0")}:${String(Math.floor((t % 3600) / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+};
+
+function errMsg(e: unknown): string {
+  return e instanceof Error ? e.message : "Something went wrong";
+}
+
+// =================== GATE ===================
 
 function HomeGate() {
   const { loading, identityLoading, user, primaryRole, companyId, profile } = useAuth();
@@ -149,7 +196,14 @@ function HomeGate() {
     }
   }, [loading, identityLoading, user, primaryRole, companyId, profile, navigate]);
 
-  if (loading || identityLoading || !user || !primaryRole || (primaryRole === "company_admin" && !onboardingChecked) || needsOnboarding) {
+  if (
+    loading ||
+    identityLoading ||
+    !user ||
+    !primaryRole ||
+    (primaryRole === "company_admin" && !onboardingChecked) ||
+    needsOnboarding
+  ) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-6 h-6 animate-spin text-primary" />
@@ -160,6 +214,8 @@ function HomeGate() {
 }
 
 type Tab = "home" | "team" | "screens" | "payroll" | "reports" | "profile";
+const VALID_TABS: Tab[] = ["home", "team", "screens", "payroll", "reports"];
+const ADMIN_ONLY_TABS: Tab[] = ["team", "reports"];
 
 function AppShell({ role }: { role: AppRole }) {
   const [tab, setTab] = useState<Tab>("home");
@@ -171,19 +227,19 @@ function AppShell({ role }: { role: AppRole }) {
   const homeTabs = navItems.filter((i) => i.to === "/");
   const { label: planLabel, sublabel: planSub } = planDisplay(plan);
 
+  // Client-side guard (RLS / server functions must still enforce this).
+  const safeTab: Tab = !isAdmin && ADMIN_ONLY_TABS.includes(tab) ? "home" : tab;
+
   // Pick up tab pushed by side nav / drawer / bottom nav
   useEffect(() => {
-    const t = consumePendingTab();
-    if (t && ["home", "team", "screens", "payroll", "reports"].includes(t)) {
-      setTab(t as Tab);
-    }
-    // Re-check whenever route lands on /
-    const handler = () => {
-      const v = consumePendingTab();
-      if (v) setTab(v as Tab);
+    const apply = () => {
+      const t = consumePendingTab();
+      if (t && VALID_TABS.includes(t as Tab)) setTab(t as Tab);
     };
-    window.addEventListener("focus", handler);
-    return () => window.removeEventListener("focus", handler);
+    apply();
+    // Re-check whenever route lands on /
+    window.addEventListener("focus", apply);
+    return () => window.removeEventListener("focus", apply);
   }, []);
 
   function go(item: (typeof navItems)[number]) {
@@ -209,7 +265,7 @@ function AppShell({ role }: { role: AppRole }) {
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {navItems.map((it) => {
             const Icon = it.icon;
-            const active = it.to === "/" ? tab === it.tab : false;
+            const active = it.to === "/" ? safeTab === it.tab : false;
             return (
               <button
                 key={it.id}
@@ -267,21 +323,18 @@ function AppShell({ role }: { role: AppRole }) {
       </aside>
 
       <div className="flex-1 min-w-0 pb-24 lg:pb-0">
-                <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-border">
+        <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border">
           <div className="max-w-screen-xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 lg:hidden min-w-0">
-  <MobileMenuTrigger />
-  <img src={LOGO_URL} alt="TillTask" className="h-7 w-auto object-contain shrink-0" />
-  <span className="text-[11px] text-muted-foreground capitalize truncate ml-1">
-    ({role.replace("_", " ")})
-  </span>
-</div>
-
-              </div>
+              <MobileMenuTrigger />
+              {/* FIX: LOGO_URL was never defined → ReferenceError on mobile */}
+              <BrandLockup className="h-7" />
+              <span className="text-[11px] text-muted-foreground capitalize truncate ml-1">
+                ({role.replace("_", " ")})
+              </span>
             </div>
-            {/* remaining header buttons... */}
 
-            <div className="hidden lg:block font-semibold capitalize">{tab}</div>
+            <div className="hidden lg:block font-semibold capitalize">{safeTab}</div>
             <div className="flex items-center gap-2">
               {plan.readonly && (
                 <Badge variant="destructive" className="hidden sm:inline-flex text-[10px]">
@@ -319,11 +372,11 @@ function AppShell({ role }: { role: AppRole }) {
         </header>
 
         <main className="max-w-screen-xl mx-auto px-4 py-6">
-          {tab === "home" && <HomeTab role={role} />}
-          {tab === "team" && <TeamTab />}
-          {tab === "screens" && <ScreensTab role={role} />}
-          {tab === "payroll" && <PayrollTab role={role} />}
-          {tab === "reports" && <ReportsTab />}
+          {safeTab === "home" && <HomeTab role={role} />}
+          {safeTab === "team" && isAdmin && <TeamTab />}
+          {safeTab === "screens" && <ScreensTab role={role} />}
+          {safeTab === "payroll" && <PayrollTab role={role} />}
+          {safeTab === "reports" && isAdmin && <ReportsTab />}
         </main>
       </div>
 
@@ -335,7 +388,7 @@ function AppShell({ role }: { role: AppRole }) {
         >
           {homeTabs.map((it) => {
             const Icon = it.icon;
-            const active = tab === it.tab;
+            const active = safeTab === it.tab;
             return (
               <button
                 key={it.id}
@@ -361,7 +414,6 @@ function AppShell({ role }: { role: AppRole }) {
     </div>
   );
 }
-
 
 // =================== HOME TAB ===================
 function HomeTab({ role }: { role: AppRole }) {
@@ -389,7 +441,7 @@ function AdminHome() {
     enabled: !!companyId,
     queryKey: ["admin-stats", companyId],
     queryFn: async () => {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localDateStr();
       const [emps, att, pending] = await Promise.all([
         supabase.from("profiles").select("id", { count: "exact", head: true }).eq("company_id", companyId!),
         supabase
@@ -494,20 +546,60 @@ function EmployeeHome() {
   const sessionRef = useRef<CaptureSession | null>(null);
   const [attendanceId, setAttendanceId] = useState<string | null>(null);
 
+  // --- Timestamp-based timer (immune to background-tab throttling) ---
+  // baseRef   = seconds banked before the current run
+  // runStart  = Date.now() when the current run began, or null when paused/stopped
+  const baseRef = useRef(0);
+  const runStartRef = useRef<number | null>(null);
+
+  const computeSeconds = useCallback(() => {
+    const running = runStartRef.current
+      ? Math.floor((Date.now() - runStartRef.current) / 1000)
+      : 0;
+    return baseRef.current + Math.max(0, running);
+  }, []);
+
+  const startRun = useCallback(() => {
+    if (runStartRef.current === null) runStartRef.current = Date.now();
+  }, []);
+
+  const pauseRun = useCallback(() => {
+    if (runStartRef.current !== null) {
+      baseRef.current = computeSeconds();
+      runStartRef.current = null;
+    }
+    setSeconds(baseRef.current);
+  }, [computeSeconds]);
+
+  // Tick the display; recompute from timestamps every time
   useEffect(() => {
     if (!tracking || onBreak) return;
-    const id = setInterval(() => setSeconds((s) => s + 1), 1000);
-    return () => clearInterval(id);
-  }, [tracking, onBreak]);
+    const tick = () => setSeconds(computeSeconds());
+    tick();
+    const id = setInterval(tick, 1000);
+    const onVis = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [tracking, onBreak, computeSeconds]);
 
-  // Persist active_seconds every 30s so reloading doesn't lose progress
+  // Persist active_seconds every 30s. `seconds` is intentionally NOT a dependency
+  // (it changes every second and would reset the interval before it ever fired).
   useEffect(() => {
     if (!tracking || !attendanceId) return;
-    const id = setInterval(() => {
-      supabase.from("attendance").update({ active_seconds: seconds }).eq("id", attendanceId);
+    const id = setInterval(async () => {
+      const { error } = await supabase
+        .from("attendance")
+        .update({ active_seconds: computeSeconds() })
+        .eq("id", attendanceId);
+      if (error) console.error("Auto-save failed", error.message);
     }, 30_000);
     return () => clearInterval(id);
-  }, [tracking, attendanceId, seconds]);
+  }, [tracking, attendanceId, computeSeconds]);
 
   // Cleanup capture on unmount
   useEffect(() => {
@@ -521,12 +613,11 @@ function EmployeeHome() {
     enabled: !!user,
     queryKey: ["my-attendance", user?.id],
     queryFn: async () => {
-      const date = new Date().toISOString().slice(0, 10);
       const { data } = await supabase
         .from("attendance")
         .select("*")
         .eq("user_id", user!.id)
-        .eq("work_date", date)
+        .eq("work_date", localDateStr())
         .maybeSingle();
       return data;
     },
@@ -536,12 +627,15 @@ function EmployeeHome() {
   useEffect(() => {
     if (!today || tracking) return;
     if (today.clock_in && !today.clock_out) {
-      const base = today.active_seconds ?? 0;
-      const sinceClockIn = Math.max(0, Math.floor((Date.now() - new Date(today.clock_in).getTime()) / 1000));
-      setSeconds(Math.max(base, sinceClockIn));
+      // Use the saved active time — NOT time-since-clock-in, which would
+      // count breaks and offline time as work.
+      baseRef.current = today.active_seconds ?? 0;
+      const onBrk = today.status === "on_break";
+      runStartRef.current = onBrk ? null : Date.now();
+      setSeconds(baseRef.current);
       setAttendanceId(today.id);
+      setOnBreak(onBrk);
       setTracking(true);
-      setOnBreak(today.status === "on_break");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [today]);
@@ -585,8 +679,7 @@ function EmployeeHome() {
       setCapturing(true);
       return true;
     } catch (e) {
-      const msg = (e as Error).message;
-      setCaptureError(msg);
+      setCaptureError(errMsg(e));
       toast.error("Screen sharing denied or unsupported. Tracking will continue without recording.");
       return false;
     }
@@ -594,69 +687,99 @@ function EmployeeHome() {
 
   async function clockAction(action: "in" | "out" | "break") {
     if (!user || !companyId) return;
-    const date = new Date().toISOString().slice(0, 10);
-    if (action === "in") {
-      const { data: row, error } = await supabase
-        .from("attendance")
-        .upsert(
-          {
-            user_id: user.id,
-            company_id: companyId,
-            work_date: date,
-            clock_in: new Date().toISOString(),
-            status: "present",
-            active_seconds: seconds,
-          },
-          { onConflict: "user_id,work_date" },
-        )
-        .select("id")
-        .single();
-      if (error) {
-        toast.error(error.message);
-        return;
+    const date = localDateStr();
+
+    try {
+      if (action === "in") {
+        // Keep the original clock_in and already-worked time if re-clocking in the same day
+        const { data: existing } = await supabase
+          .from("attendance")
+          .select("id, clock_in, active_seconds")
+          .eq("user_id", user.id)
+          .eq("work_date", date)
+          .maybeSingle();
+
+        const base = existing?.active_seconds ?? 0;
+        const payload: Record<string, unknown> = {
+          user_id: user.id,
+          company_id: companyId,
+          work_date: date,
+          status: "present",
+          clock_out: null, // FIX: clear old clock_out so restore-on-reload works
+          active_seconds: base,
+        };
+        if (!existing?.clock_in) payload.clock_in = new Date().toISOString();
+
+        const { data: row, error } = await supabase
+          .from("attendance")
+          .upsert(payload as never, { onConflict: "user_id,work_date" })
+          .select("id")
+          .single();
+        if (error) throw error;
+
+        baseRef.current = base;
+        runStartRef.current = Date.now();
+        setSeconds(base);
+        setAttendanceId(row.id);
+        setOnBreak(false);
+        setTracking(true);
+        toast.success("Clocked in");
+        // start screen capture (browser will prompt for share permission)
+        await startCapture(row.id);
+        qc.invalidateQueries({ queryKey: ["my-attendance", user.id] });
+      } else if (action === "out") {
+        pauseRun();
+        const { error } = await supabase
+          .from("attendance")
+          .update({
+            clock_out: new Date().toISOString(),
+            status: "clocked_out",
+            active_seconds: baseRef.current,
+          })
+          .eq("user_id", user.id)
+          .eq("work_date", date);
+        if (error) {
+          startRun(); // resume so time isn't lost on failure
+          throw error;
+        }
+        setTracking(false);
+        setOnBreak(false);
+        sessionRef.current?.stop();
+        sessionRef.current = null;
+        setCapturing(false);
+        toast.success("Clocked out");
+        qc.invalidateQueries({ queryKey: ["my-attendance", user.id] });
+      } else {
+        const nextOnBreak = !onBreak;
+        if (nextOnBreak) pauseRun();
+        else startRun();
+        setOnBreak(nextOnBreak);
+        const { error } = await supabase
+          .from("attendance")
+          .update({
+            status: nextOnBreak ? "on_break" : "present",
+            active_seconds: computeSeconds(),
+          })
+          .eq("user_id", user.id)
+          .eq("work_date", date);
+        if (error) {
+          // revert UI + timer
+          if (nextOnBreak) startRun();
+          else pauseRun();
+          setOnBreak(!nextOnBreak);
+          throw error;
+        }
       }
-      setAttendanceId(row.id);
-      setTracking(true);
-      setOnBreak(false);
-      toast.success("Clocked in");
-      // start screen capture (browser will prompt for share permission)
-      await startCapture(row.id);
-      qc.invalidateQueries({ queryKey: ["my-attendance", user.id] });
-    } else if (action === "out") {
-      await supabase
-        .from("attendance")
-        .update({
-          clock_out: new Date().toISOString(),
-          status: "clocked_out",
-          active_seconds: seconds,
-        })
-        .eq("user_id", user.id)
-        .eq("work_date", date);
-      setTracking(false);
-      sessionRef.current?.stop();
-      sessionRef.current = null;
-      setCapturing(false);
-      toast.success("Clocked out");
-      qc.invalidateQueries({ queryKey: ["my-attendance", user.id] });
-    } else {
-      const nextOnBreak = !onBreak;
-      setOnBreak(nextOnBreak);
-      await supabase
-        .from("attendance")
-        .update({ status: nextOnBreak ? "on_break" : "present" })
-        .eq("user_id", user.id)
-        .eq("work_date", date);
+    } catch (e) {
+      toast.error(errMsg(e));
     }
   }
-
-  const fmt = (s: number) =>
-    `${String(Math.floor(s / 3600)).padStart(2, "0")}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
   return (
     <div className="space-y-4">
       <Card className="p-6 text-center bg-gradient-to-br from-primary/10 to-accent/40">
         <div className="text-xs uppercase font-semibold text-muted-foreground">Today</div>
-        <div className="text-5xl font-bold font-mono my-3">{fmt(seconds)}</div>
+        <div className="text-5xl font-bold font-mono my-3">{fmtHMS(seconds)}</div>
         <div className="flex items-center justify-center gap-2 flex-wrap">
           <Badge variant={tracking ? "default" : "secondary"}>
             {tracking ? (onBreak ? "On break" : "Tracking…") : "Idle"}
@@ -693,9 +816,7 @@ function EmployeeHome() {
             </>
           )}
         </div>
-        {captureError && (
-          <p className="text-[11px] text-destructive mt-3">{captureError}</p>
-        )}
+        {captureError && <p className="text-[11px] text-destructive mt-3">{captureError}</p>}
         <p className="text-[11px] text-muted-foreground mt-3 max-w-md mx-auto">
           When you clock in, your browser will ask permission to share your screen. Snapshots
           (~50 KB each) are taken every 10s. A short clip is uploaded only if your admin
@@ -717,8 +838,14 @@ function EmployeeHome() {
       )}
 
       <div className="grid grid-cols-3 gap-3">
-        <StatCard label="Active" value={fmt(today?.active_seconds ?? seconds)} icon={Activity} accent="success" small />
-        <StatCard label="Idle" value={fmt(today?.idle_seconds ?? 0)} icon={Clock} accent="warning" small />
+        <StatCard
+          label="Active"
+          value={fmtHMS(tracking ? seconds : (today?.active_seconds ?? seconds))}
+          icon={Activity}
+          accent="success"
+          small
+        />
+        <StatCard label="Idle" value={fmtHMS(today?.idle_seconds ?? 0)} icon={Clock} accent="warning" small />
         <StatCard label="Score" value={`${today?.productivity_score ?? "—"}`} icon={TrendingUp} small />
       </div>
 
@@ -766,8 +893,9 @@ function TeamTab() {
         <TabsTrigger value="members"><Users className="w-3.5 h-3.5" /> Members</TabsTrigger>
         <TabsTrigger value="attendance"><Clock className="w-3.5 h-3.5" /> Attendance</TabsTrigger>
         <TabsTrigger value="clips"><Video className="w-3.5 h-3.5" /> Clips</TabsTrigger>
+        {/* FIX: this trigger was missing, so the Monitoring tab was unreachable */}
+        <TabsTrigger value="monitoring"><Shield className="w-3.5 h-3.5" /> Monitoring</TabsTrigger>
         <TabsTrigger value="invites"><KeyRound className="w-3.5 h-3.5" /> Invites</TabsTrigger>
-        
       </TabsList>
 
       <TabsContent value="members" className="space-y-5">
@@ -800,39 +928,38 @@ function TeamTab() {
       </TabsContent>
 
       <TabsContent value="invites" className="space-y-5">
-
-      <Card className="p-4">
-        <h2 className="font-semibold mb-3">Invite codes</h2>
-        <div className="space-y-2">
-          {invites?.map((i) => (
-            <div key={i.code} className="flex items-center justify-between p-2 rounded bg-muted text-sm">
-              <div>
-                <code className="font-mono font-bold">{i.code}</code>
-                <span className="ml-2 text-muted-foreground">{i.intended_name ?? "—"}</span>
+        <Card className="p-4">
+          <h2 className="font-semibold mb-3">Invite codes</h2>
+          <div className="space-y-2">
+            {invites?.map((i) => (
+              <div key={i.code} className="flex items-center justify-between p-2 rounded bg-muted text-sm">
+                <div>
+                  <code className="font-mono font-bold">{i.code}</code>
+                  <span className="ml-2 text-muted-foreground">{i.intended_name ?? "—"}</span>
+                </div>
+                {i.used_at ? (
+                  <Badge variant="secondary">Used</Badge>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      navigator.clipboard.writeText(i.code);
+                      toast.success("Copied");
+                    }}
+                  >
+                    <Copy className="w-3 h-3" />
+                  </Button>
+                )}
               </div>
-              {i.used_at ? (
-                <Badge variant="secondary">Used</Badge>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    navigator.clipboard.writeText(i.code);
-                    toast.success("Copied");
-                  }}
-                >
-                  <Copy className="w-3 h-3" />
-                </Button>
-              )}
-            </div>
-          ))}
-          {(!invites || invites.length === 0) && (
-            <p className="text-sm text-muted-foreground">
-              Generate invite codes from the onboarding flow or here later.
-            </p>
-          )}
-        </div>
-      </Card>
+            ))}
+            {(!invites || invites.length === 0) && (
+              <p className="text-sm text-muted-foreground">
+                Generate invite codes from the onboarding flow or here later.
+              </p>
+            )}
+          </div>
+        </Card>
       </TabsContent>
     </Tabs>
   );
@@ -883,7 +1010,7 @@ function ScreensTab({ role }: { role: AppRole }) {
     queryKey: [...(isAdmin ? ["screen-counts-co", companyId] : ["screen-counts-me", user?.id])],
     queryFn: async () => {
       const base = () => {
-        let b = supabase.from("screenshots").select("status", { count: "exact", head: true });
+        const b = supabase.from("screenshots").select("status", { count: "exact", head: true });
         return isAdmin ? b.eq("company_id", companyId!) : b.eq("user_id", user!.id);
       };
       const [p, a, r, all] = await Promise.all([
@@ -916,7 +1043,7 @@ function ScreensTab({ role }: { role: AppRole }) {
       setReviewOpen(null);
       setNote("");
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(errMsg(e));
     } finally {
       setBusy(false);
     }
@@ -1089,72 +1216,6 @@ function ScreensTab({ role }: { role: AppRole }) {
   );
 }
 
-// =================== PROJECTS ===================
-function ProjectsTab({ role }: { role: AppRole }) {
-  const { companyId } = useAuth();
-  const qc = useQueryClient();
-  const { data: projects } = useQuery({
-    enabled: !!companyId,
-    queryKey: ["projects", companyId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("company_id", companyId!)
-        .order("created_at", { ascending: false });
-      return data ?? [];
-    },
-  });
-
-  const [name, setName] = useState("");
-  const canManage = role !== "employee";
-
-  async function addProject() {
-    if (!name.trim() || !companyId) return;
-    const { error } = await supabase
-      .from("projects")
-      .insert({ name: name.trim(), company_id: companyId, status: "active" });
-    if (error) toast.error(error.message);
-    else {
-      setName("");
-      qc.invalidateQueries({ queryKey: ["projects", companyId] });
-      toast.success("Project added");
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      {canManage && (
-        <Card className="p-4">
-          <div className="flex gap-2">
-            <input
-              className="flex-1 h-9 rounded-md border bg-transparent px-3 text-sm"
-              placeholder="New project name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-            <Button onClick={addProject}>Add</Button>
-          </div>
-        </Card>
-      )}
-      {projects?.map((p) => (
-        <Card key={p.id} className="p-4 flex items-center justify-between">
-          <div>
-            <div className="font-semibold">{p.name}</div>
-            <div className="text-xs text-muted-foreground">{p.description ?? "—"}</div>
-          </div>
-          <Badge variant={p.status === "active" ? "default" : "secondary"}>{p.status}</Badge>
-        </Card>
-      ))}
-      {(!projects || projects.length === 0) && (
-        <Card className="p-8 text-center text-sm text-muted-foreground">
-          No projects yet.
-        </Card>
-      )}
-    </div>
-  );
-}
-
 // =================== REPORTS ===================
 function ReportsTab() {
   return (
@@ -1189,7 +1250,7 @@ function OverviewReport() {
     enabled: !!companyId,
     queryKey: ["report-att", companyId],
     queryFn: async () => {
-      const since = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+      const since = daysAgoLocal(6);
       const { data } = await supabase
         .from("attendance")
         .select("work_date, active_seconds, idle_seconds, productivity_score")
@@ -1214,7 +1275,12 @@ function OverviewReport() {
       map.set(row.work_date, m);
     });
     return Array.from(map.values())
-      .map((m) => ({ ...m, score: Math.round(m.score / Math.max(m.n, 1)) }))
+      .map((m) => ({
+        ...m,
+        active: Math.round(m.active * 10) / 10,
+        idle: Math.round(m.idle * 10) / 10,
+        score: Math.round(m.score / Math.max(m.n, 1)),
+      }))
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [data]);
 
@@ -1255,8 +1321,8 @@ function OverviewReport() {
 // ---------- DRILL-DOWN ----------
 function DrilldownReport() {
   const { companyId } = useAuth();
-  const today = new Date().toISOString().slice(0, 10);
-  const weekAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+  const today = localDateStr();
+  const weekAgo = daysAgoLocal(6);
   const [employeeId, setEmployeeId] = useState<string>("");
   const [from, setFrom] = useState(weekAgo);
   const [to, setTo] = useState(today);
@@ -1307,12 +1373,7 @@ function DrilldownReport() {
     const totalLogged = t.active + t.idle + t.break;
     const activePct = totalLogged ? Math.round((t.active / totalLogged) * 100) : 0;
     const idlePct = totalLogged ? Math.round((t.idle / totalLogged) * 100) : 0;
-    // expectation: ~45m breaks per workday
-    const expectedBreak = (entries?.length ?? 0) * 45;
-    const breakAdherence =
-      expectedBreak === 0
-        ? 100
-        : Math.max(0, 100 - Math.round((Math.abs(t.break - expectedBreak) / expectedBreak) * 100));
+    const breakAdherence = calcBreakAdherence(t.break, entries?.length ?? 0);
     const taskProgress = t.total ? Math.round((t.done / t.total) * 100) : 0;
     const score = Math.round(
       activePct * 0.45 + breakAdherence * 0.2 + taskProgress * 0.25 + (100 - idlePct) * 0.1,
@@ -1320,11 +1381,13 @@ function DrilldownReport() {
     return { ...t, activePct, idlePct, breakAdherence, taskProgress, score };
   }, [entries]);
 
+  // One decimal so short days don't round to 0
+  const toHours = (min: number) => Math.round((min / 60) * 10) / 10;
   const dailyChart = (entries ?? []).map((r) => ({
     date: r.entry_date,
-    active: Math.round(r.active_minutes / 60),
-    idle: Math.round(r.idle_minutes / 60),
-    break: Math.round(r.break_minutes / 60),
+    active: toHours(r.active_minutes),
+    idle: toHours(r.idle_minutes),
+    break: toHours(r.break_minutes),
   }));
 
   const selectedMember = members?.find((m) => m.id === employeeId);
@@ -1379,8 +1442,8 @@ function DrilldownReport() {
       )}
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <DrillStat label="Active time" value={`${Math.round(summary.active / 60)}h`} pct={summary.activePct} accent="primary" sub={`${summary.activePct}% of logged`} />
-        <DrillStat label="Idle time" value={`${Math.round(summary.idle / 60)}h`} pct={summary.idlePct} accent="warning" sub={`${summary.idlePct}% of logged`} />
+        <DrillStat label="Active time" value={`${(summary.active / 60).toFixed(1)}h`} pct={summary.activePct} accent="primary" sub={`${summary.activePct}% of logged`} />
+        <DrillStat label="Idle time" value={`${(summary.idle / 60).toFixed(1)}h`} pct={summary.idlePct} accent="warning" sub={`${summary.idlePct}% of logged`} />
         <DrillStat label="Break adherence" value={`${summary.breakAdherence}%`} pct={summary.breakAdherence} accent="success" sub={`${Math.round(summary.break)}m taken`} />
         <DrillStat label="Task progress" value={`${summary.done}/${summary.total}`} pct={summary.taskProgress} accent="primary" sub={`${summary.taskProgress}% complete`} />
       </div>
@@ -1438,6 +1501,17 @@ function DrillStat({
 }
 
 // ---------- AUDIT LOG ----------
+type AuditRowData = {
+  id: string;
+  created_at: string;
+  actor_id: string | null;
+  target_user_id: string | null;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  metadata: unknown;
+};
+
 const AUDIT_CATEGORIES: ReadonlyArray<{
   id: string;
   label: string;
@@ -1451,8 +1525,8 @@ const AUDIT_CATEGORIES: ReadonlyArray<{
 
 function AuditLogView() {
   const { companyId } = useAuth();
-  const today = new Date().toISOString().slice(0, 10);
-  const weekAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+  const today = localDateStr();
+  const weekAgo = daysAgoLocal(6);
   const [category, setCategory] = useState<string>("all");
   const [employeeId, setEmployeeId] = useState<string>("all");
   const [from, setFrom] = useState(weekAgo);
@@ -1474,22 +1548,28 @@ function AuditLogView() {
     enabled: !!companyId,
     queryKey: ["audit", companyId, category, employeeId, from, to],
     queryFn: async () => {
+      // Local-day boundaries converted to UTC instants
+      const fromIso = new Date(`${from}T00:00:00`).toISOString();
+      const toIso = new Date(`${to}T23:59:59.999`).toISOString();
+
       let q = supabase
         .from("audit_logs")
         .select("id, created_at, actor_id, target_user_id, action, entity_type, entity_id, metadata")
         .eq("company_id", companyId!)
-        .gte("created_at", `${from}T00:00:00`)
-        .lte("created_at", `${to}T23:59:59`)
+        .gte("created_at", fromIso)
+        .lte("created_at", toIso)
         .order("created_at", { ascending: false })
         .limit(300);
       if (employeeId !== "all") {
         q = q.or(`actor_id.eq.${employeeId},target_user_id.eq.${employeeId}`);
       }
+      // FIX: filter by category on the server so .limit(300) can't cut off matches
+      const matches = AUDIT_CATEGORIES.find((c) => c.id === category)?.match;
+      if (category !== "all" && matches?.length) {
+        q = q.or(matches.map((m) => `action.ilike.${m}%`).join(","));
+      }
       const { data } = await q;
-      const all = data ?? [];
-      if (category === "all") return all;
-      const matches = AUDIT_CATEGORIES.find((c) => c.id === category)?.match ?? [];
-      return all.filter((r) => matches.some((m) => r.action?.startsWith(m)));
+      return (data ?? []) as AuditRowData[];
     },
   });
 
@@ -1500,11 +1580,12 @@ function AuditLogView() {
   }, [members]);
 
   const groupedByDate = useMemo(() => {
-    const m = new Map<string, typeof logs>();
+    const m = new Map<string, AuditRowData[]>();
     (logs ?? []).forEach((row) => {
-      const d = (row.created_at as string).slice(0, 10);
-      if (!m.has(d)) m.set(d, [] as never);
-      (m.get(d) as never[]).push(row as never);
+      const d = localDateStr(new Date(row.created_at));
+      const arr = m.get(d);
+      if (arr) arr.push(row);
+      else m.set(d, [row]);
     });
     return Array.from(m.entries());
   }, [logs]);
@@ -1517,7 +1598,7 @@ function AuditLogView() {
             <label className="text-xs font-medium text-muted-foreground">Category</label>
             <select
               value={category}
-              onChange={(e) => setCategory(e.target.value as typeof category)}
+              onChange={(e) => setCategory(e.target.value)}
               className="w-full h-9 rounded-md border bg-transparent px-3 text-sm"
             >
               {AUDIT_CATEGORIES.map((c) => (
@@ -1564,14 +1645,14 @@ function AuditLogView() {
         {groupedByDate.map(([date, rows]) => (
           <div key={date}>
             <div className="text-xs font-semibold uppercase text-muted-foreground mb-2 sticky top-16 bg-background/95 backdrop-blur py-1">
-              {new Date(date).toLocaleDateString(undefined, {
+              {parseLocalDate(date).toLocaleDateString(undefined, {
                 weekday: "long",
                 month: "short",
                 day: "numeric",
               })}
             </div>
             <Card className="divide-y">
-              {(rows ?? []).map((row) => (
+              {rows.map((row) => (
                 <AuditRow
                   key={row.id}
                   row={row}
@@ -1586,17 +1667,6 @@ function AuditLogView() {
     </div>
   );
 }
-
-type AuditRowData = {
-  id: string;
-  created_at: string;
-  actor_id: string | null;
-  target_user_id: string | null;
-  action: string;
-  entity_type: string | null;
-  entity_id: string | null;
-  metadata: unknown;
-};
 
 function AuditRow({
   row,
@@ -1682,8 +1752,6 @@ function describeAction(action: string) {
 }
 
 // =================== SHARED ===================
-
-// =================== SHARED ===================
 function StatCard({
   label,
   value,
@@ -1721,7 +1789,7 @@ function ProductivityBreakdown({
     enabled: !!(companyId || userOnly),
     queryKey: ["prod-breakdown", companyId ?? "u", userOnly ?? "c"],
     queryFn: async () => {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localDateStr();
       let q = supabase
         .from("productivity_entries")
         .select("active_minutes, idle_minutes, break_minutes, tasks_completed, tasks_total")
@@ -1745,8 +1813,10 @@ function ProductivityBreakdown({
     { active: 0, idle: 0, break: 0, done: 0, total: 0 },
   );
 
-  const breakAdherence = totals.break > 0 ? Math.min(100, Math.round((45 / Math.max(totals.break, 1)) * 100)) : 100;
+  // Same formula as Drill-down; scales expected break by number of entries
+  const breakAdherence = calcBreakAdherence(totals.break, data?.length ?? 0);
   const taskProgress = totals.total > 0 ? Math.round((totals.done / totals.total) * 100) : 0;
+  const logged = Math.max(totals.active + totals.idle + totals.break, 1);
 
   const pieData = [
     { name: "Active", value: totals.active, color: "var(--color-primary)" },
@@ -1770,8 +1840,8 @@ function ProductivityBreakdown({
         </ResponsiveContainer>
       </div>
       <div className="space-y-3 text-sm">
-        <Metric label="Active time" value={`${totals.active}m`} color="bg-primary" pct={Math.min(100, (totals.active / Math.max(totals.active + totals.idle + totals.break, 1)) * 100)} />
-        <Metric label="Idle time" value={`${totals.idle}m`} color="bg-warning" pct={Math.min(100, (totals.idle / Math.max(totals.active + totals.idle + totals.break, 1)) * 100)} />
+        <Metric label="Active time" value={`${totals.active}m`} color="bg-primary" pct={Math.min(100, (totals.active / logged) * 100)} />
+        <Metric label="Idle time" value={`${totals.idle}m`} color="bg-warning" pct={Math.min(100, (totals.idle / logged) * 100)} />
         <Metric label="Break adherence" value={`${breakAdherence}%`} color="bg-success" pct={breakAdherence} />
         <Metric label="Task progress" value={`${totals.done}/${totals.total}`} color="bg-primary" pct={taskProgress} />
       </div>
@@ -1882,8 +1952,12 @@ function AlertsBell({ companyId }: { companyId: string }) {
                       variant="outline"
                       className="h-6 text-[11px] ml-auto"
                       onClick={async () => {
-                        await resolveFn({ data: { alertId: a.id, companyId } });
-                        qc.invalidateQueries({ queryKey: ["alerts", companyId] });
+                        try {
+                          await resolveFn({ data: { alertId: a.id, companyId } });
+                          qc.invalidateQueries({ queryKey: ["alerts", companyId] });
+                        } catch (e) {
+                          toast.error(errMsg(e));
+                        }
                       }}
                     >
                       Resolve
@@ -1935,7 +2009,7 @@ function TeamMemberRow({
       setClipOpen(false);
       setReason("");
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(errMsg(e));
     } finally {
       setBusy(false);
     }
@@ -2048,7 +2122,7 @@ function CompensationDialog({
       qc.invalidateQueries({ queryKey: ["comp", member.id] });
       onOpenChange(false);
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(errMsg(e));
     } finally {
       setBusy(false);
     }
@@ -2097,9 +2171,9 @@ function CompensationDialog({
 function AttendanceManager() {
   const { companyId } = useAuth();
   const qc = useQueryClient();
-  const today = new Date().toISOString().slice(0, 10);
-  const weekAgo = new Date(Date.now() - 13 * 86400000).toISOString().slice(0, 10);
-  const [from, setFrom] = useState(weekAgo);
+  const today = localDateStr();
+  const twoWeeksAgo = daysAgoLocal(13); // FIX: renamed from misleading "weekAgo"
+  const [from, setFrom] = useState(twoWeeksAgo);
   const [to, setTo] = useState(today);
   const [employeeId, setEmployeeId] = useState<string>("all");
   const [editing, setEditing] = useState<any | null>(null);
@@ -2140,6 +2214,9 @@ function AttendanceManager() {
     (members ?? []).forEach((p) => m.set(p.id, p.full_name ?? p.email ?? "—"));
     return m;
   }, [members]);
+
+  const fmtTime = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—";
 
   return (
     <div className="space-y-4">
@@ -2193,8 +2270,8 @@ function AttendanceManager() {
                 <tr key={r.id} className="border-t">
                   <td className="p-2">{r.work_date}</td>
                   <td className="p-2 truncate max-w-[160px]">{nameMap.get(r.user_id)}</td>
-                  <td className="p-2 text-xs font-mono">{r.clock_in ? new Date(r.clock_in).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</td>
-                  <td className="p-2 text-xs font-mono">{r.clock_out ? new Date(r.clock_out).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</td>
+                  <td className="p-2 text-xs font-mono">{fmtTime(r.clock_in)}</td>
+                  <td className="p-2 text-xs font-mono">{fmtTime(r.clock_out)}</td>
                   <td className="p-2 font-mono text-xs">{((r.active_seconds ?? 0) / 3600).toFixed(2)}h</td>
                   <td className="p-2">
                     <div className="flex items-center gap-1">
@@ -2255,7 +2332,7 @@ function AttendanceEditDialog({
 }) {
   const upsertFn = useServerFn(upsertAttendanceManual);
   const [empId, setEmpId] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(localDateStr());
   const [clockIn, setClockIn] = useState("");
   const [clockOut, setClockOut] = useState("");
   const [activeMin, setActiveMin] = useState("0");
@@ -2272,12 +2349,13 @@ function AttendanceEditDialog({
       setReason("");
     } else {
       setEmpId(members[0]?.id ?? "");
-      setDate(new Date().toISOString().slice(0, 10));
+      setDate(localDateStr());
       setClockIn("");
       setClockOut("");
       setActiveMin("0");
       setReason("");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing, open]);
 
   async function save() {
@@ -2302,7 +2380,7 @@ function AttendanceEditDialog({
       toast.success(editing ? "Entry updated" : "Manual entry created");
       onClose();
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(errMsg(e));
     } finally {
       setBusy(false);
     }
@@ -2402,22 +2480,25 @@ function ClipsPanel({ scope }: { scope: "admin" | "employee" }) {
   });
 
   useEffect(() => {
+    if (!clips) return;
+    let cancelled = false;
     (async () => {
-      if (!clips) return;
-      const next: Record<string, string> = { ...signedUrls };
-      let updated = false;
+      const added: Record<string, string> = {};
       for (const c of clips) {
-        if (next[c.id]) continue;
+        if (signedUrls[c.id]) continue;
         const { data } = await supabase.storage
           .from("recordings")
           .createSignedUrl(c.storage_path, 3600);
-        if (data?.signedUrl) {
-          next[c.id] = data.signedUrl;
-          updated = true;
-        }
+        if (data?.signedUrl) added[c.id] = data.signedUrl;
       }
-      if (updated) setSignedUrls(next);
+      if (!cancelled && Object.keys(added).length > 0) {
+        setSignedUrls((prev) => ({ ...prev, ...added }));
+      }
     })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clips]);
 
   const nameMap = useMemo(() => {
@@ -2482,6 +2563,7 @@ function AdminPayroll() {
   const [overrideRow, setOverrideRow] = useState<any | null>(null);
   const [overrideVal, setOverrideVal] = useState("");
   const [overrideReason, setOverrideReason] = useState("");
+  const [savingOverride, setSavingOverride] = useState(false);
 
   const { data: rows } = useQuery({
     enabled: !!companyId,
@@ -2504,9 +2586,50 @@ function AdminPayroll() {
       toast.success(`Calculated for ${res.count} employees`);
       qc.invalidateQueries({ queryKey: ["salaries", companyId, year, month] });
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(errMsg(e));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function finalizeRow(id: string) {
+    try {
+      await finalizeFn({ data: { salaryId: id, companyId: companyId! } });
+      toast.success("Finalized");
+      qc.invalidateQueries({ queryKey: ["salaries", companyId, year, month] });
+    } catch (e) {
+      toast.error(errMsg(e));
+    }
+  }
+
+  async function saveOverride() {
+    if (!overrideRow) return;
+    const amount = Number(overrideVal);
+    if (!Number.isFinite(amount) || amount < 0) {
+      toast.error("Enter a valid amount");
+      return;
+    }
+    if (!overrideReason.trim()) {
+      toast.error("A reason is required");
+      return;
+    }
+    setSavingOverride(true);
+    try {
+      await overrideFn({
+        data: {
+          salaryId: overrideRow.id,
+          companyId: companyId!,
+          overrideAmount: amount,
+          reason: overrideReason.trim(),
+        },
+      });
+      toast.success("Override saved");
+      qc.invalidateQueries({ queryKey: ["salaries", companyId, year, month] });
+      setOverrideRow(null);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setSavingOverride(false);
     }
   }
 
@@ -2514,7 +2637,9 @@ function AdminPayroll() {
     (s, r) => s + Number(r.override_amount ?? r.total_amount ?? 0),
     0,
   );
-  const currency = rows?.[0]?.currency ?? "INR";
+  // FIX: currency was computed but never used; INR was hardcoded everywhere
+  const currency: string = rows?.[0]?.currency ?? "INR";
+  const mixedCurrency = (rows ?? []).some((r) => (r.currency ?? "INR") !== currency);
 
   return (
     <div className="space-y-4">
@@ -2544,10 +2669,11 @@ function AdminPayroll() {
       <Card className="p-4 bg-gradient-to-br from-primary/10 to-accent/30">
         <div className="text-xs uppercase text-muted-foreground font-semibold">Total payroll this period</div>
         <div className="text-3xl font-bold text-primary mt-1">
-          {formatINR(totalPayroll)}
+          {formatMoney(totalPayroll, currency)}
         </div>
         <div className="text-xs text-muted-foreground mt-1">
           {rows?.length ?? 0} employees · {year}-{String(month).padStart(2, "0")}
+          {mixedCurrency && " · mixed currencies — total is not meaningful"}
         </div>
       </Card>
 
@@ -2569,14 +2695,15 @@ function AdminPayroll() {
             <tbody>
               {rows?.map((r: any) => {
                 const final = Number(r.override_amount ?? r.total_amount ?? 0);
+                const cur = r.currency ?? "INR";
                 return (
                   <tr key={r.id} className="border-t">
                     <td className="p-2 truncate max-w-[160px]">{r.profiles?.full_name ?? r.profiles?.email ?? "—"}</td>
                     <td className="p-2 text-right font-mono text-xs">{Number(r.worked_hours).toFixed(1)}h</td>
                     <td className="p-2 text-right font-mono text-xs">{Number(r.expected_hours).toFixed(0)}h</td>
-                    <td className="p-2 text-right font-mono text-xs">{formatINR(Number(r.prorated_amount))}</td>
-                    <td className="p-2 text-right font-mono text-xs">{formatINR(Number(r.overtime_amount))}</td>
-                    <td className="p-2 text-right font-mono font-semibold">{formatINR(final)}</td>
+                    <td className="p-2 text-right font-mono text-xs">{formatMoney(Number(r.prorated_amount), cur)}</td>
+                    <td className="p-2 text-right font-mono text-xs">{formatMoney(Number(r.overtime_amount), cur)}</td>
+                    <td className="p-2 text-right font-mono font-semibold">{formatMoney(final, cur)}</td>
                     <td className="p-2 text-right">
                       <Badge variant={r.status === "finalized" ? "default" : "secondary"} className="text-[10px]">
                         {r.status}
@@ -2592,11 +2719,7 @@ function AdminPayroll() {
                           }}>
                             <Edit3 className="w-3 h-3" />
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={async () => {
-                            await finalizeFn({ data: { salaryId: r.id, companyId: companyId! } });
-                            toast.success("Finalized");
-                            qc.invalidateQueries({ queryKey: ["salaries", companyId, year, month] });
-                          }}>
+                          <Button size="sm" variant="ghost" onClick={() => finalizeRow(r.id)}>
                             <Lock className="w-3 h-3" />
                           </Button>
                         </>
@@ -2607,293 +2730,4 @@ function AdminPayroll() {
                   </tr>
                 );
               })}
-              {(!rows || rows.length === 0) && (
-                <tr>
-                  <td colSpan={8} className="text-center text-muted-foreground p-8 text-sm">
-                    No salary records. Click "Calculate" to generate from this month's attendance.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      <Dialog open={!!overrideRow} onOpenChange={(o) => !o && setOverrideRow(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Override salary</DialogTitle>
-            <DialogDescription>
-              Set a custom payment amount and reason. The calculated value is kept for audit.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Override amount (INR)</Label>
-              <Input type="number" value={overrideVal} onChange={(e) => setOverrideVal(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Reason</Label>
-              <Textarea rows={2} value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setOverrideRow(null)}>Cancel</Button>
-            <Button onClick={async () => {
-              await overrideFn({
-                data: {
-                  salaryId: overrideRow.id,
-                  companyId: companyId!,
-                  overrideAmount: Number(overrideVal),
-                  reason: overrideReason,
-                },
-              });
-              toast.success("Override saved");
-              qc.invalidateQueries({ queryKey: ["salaries", companyId, year, month] });
-              setOverrideRow(null);
-            }}>Save</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-function EmployeePayroll() {
-  const { user } = useAuth();
-  const { data: rows } = useQuery({
-    enabled: !!user,
-    queryKey: ["my-salary", user?.id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("salary_records")
-        .select("*")
-        .eq("employee_id", user!.id)
-        .order("period_year", { ascending: false })
-        .order("period_month", { ascending: false })
-        .limit(12);
-      return data ?? [];
-    },
-  });
-
-  const latest = rows?.[0];
-
-  return (
-    <div className="space-y-4">
-      {latest ? (
-        <Card className="p-5 bg-gradient-to-br from-primary/10 to-accent/30">
-          <div className="text-xs uppercase text-muted-foreground font-semibold">
-            {new Date(latest.period_year, latest.period_month - 1).toLocaleString(undefined, { month: "long", year: "numeric" })}
-          </div>
-          <div className="text-4xl font-bold text-primary mt-1">
-            {latest.currency} {Number(latest.override_amount ?? latest.total_amount).toFixed(2)}
-          </div>
-          <div className="text-xs text-muted-foreground mt-2">
-            {Number(latest.worked_hours).toFixed(1)}h worked of {Number(latest.expected_hours).toFixed(0)}h expected
-            · Status: <Badge variant={latest.status === "finalized" ? "default" : "secondary"} className="text-[10px] ml-1">{latest.status}</Badge>
-          </div>
-        </Card>
-      ) : (
-        <Card className="p-8 text-center">
-          <DollarSign className="w-8 h-8 text-muted-foreground/60 mx-auto mb-2" />
-          <p className="text-sm text-muted-foreground">No salary records yet. Your admin will calculate payroll at month-end.</p>
-        </Card>
-      )}
-
-      <Card className="p-0 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-xs">
-              <tr>
-                <th className="text-left p-2">Period</th>
-                <th className="text-right p-2">Worked</th>
-                <th className="text-right p-2">Total</th>
-                <th className="text-right p-2">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows?.map((r) => (
-                <tr key={r.id} className="border-t">
-                  <td className="p-2">{r.period_year}-{String(r.period_month).padStart(2, "0")}</td>
-                  <td className="p-2 text-right font-mono text-xs">{Number(r.worked_hours).toFixed(1)}h</td>
-                  <td className="p-2 text-right font-mono font-semibold">{r.currency} {Number(r.override_amount ?? r.total_amount).toFixed(2)}</td>
-                  <td className="p-2 text-right">
-                    <Badge variant={r.status === "finalized" ? "default" : "secondary"} className="text-[10px]">{r.status}</Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-
-// Re-sign storage paths on demand so screenshots survive past the
-// 7-day signed URL limit and don't show as broken images after redeploys.
-function ScreenshotImage({ src }: { src: string | null | undefined }) {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!src) return;
-      if (/^https?:/.test(src)) {
-        setUrl(src);
-        return;
-      }
-      const { data } = await supabase.storage
-        .from("recordings")
-        .createSignedUrl(src, 3600);
-      if (!cancelled) setUrl(data?.signedUrl ?? null);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [src]);
-  if (!url) return <Camera className="w-8 h-8 text-muted-foreground" />;
-  return <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />;
-}
-
-// ===== Trial progress banner =====
-// ===== Trial progress banner =====
-function TrialBanner() {
-  const plan = usePlan();
-  const navigate = useNavigate();
-  if (plan.status !== "trial" || !plan.isActive) return null;
-  const TOTAL = 7; // <-- changed from 14 to 7
-  const used = Math.max(0, TOTAL - plan.daysLeft);
-  const pct = Math.min(100, Math.round((used / TOTAL) * 100));
-  return (
-    <Card className="p-4 border-primary/30 bg-primary/5">
-      <div className="flex items-center justify-between gap-3 mb-2">
-        <div>
-          <div className="text-sm font-semibold">Free trial · {plan.daysLeft} day{plan.daysLeft === 1 ? "" : "s"} left</div>
-          <div className="text-xs text-muted-foreground">All features unlocked for 7 days. Subscribe to keep your team productive.</div>
-        </div>
-        <Button size="sm" onClick={() => navigate({ to: "/pricing" })}>Upgrade</Button>
-      </div>
-      <div className="h-2 rounded-full bg-muted overflow-hidden">
-        <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
-      </div>
-      <div className="text-[10px] text-muted-foreground mt-1">{used}/{TOTAL} days used</div>
-    </Card>
-  );
-}
-
-
-// ===== Monitoring settings (admin) =====
-function MonitoringSettingsCard() {
-  const { companyId } = useAuth();
-  const qc = useQueryClient();
-  const { data: co, refetch } = useQuery({
-    enabled: !!companyId,
-    queryKey: ["co-monitoring", companyId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("companies")
-        .select("monitoring_enabled, allowed_apps")
-        .eq("id", companyId!)
-        .maybeSingle();
-      return data;
-    },
-  });
-  const [enabled, setEnabled] = useState<boolean>(true);
-  const [items, setItems] = useState<Array<{ label: string; url: string }>>([]);
-  const [label, setLabel] = useState("");
-  const [url, setUrl] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (!co) return;
-    setEnabled(!!co.monitoring_enabled);
-    setItems(((co.allowed_apps as any) ?? []) as Array<{ label: string; url: string }>);
-  }, [co]);
-
-  async function save(next?: { enabled?: boolean; items?: Array<{ label: string; url: string }> }) {
-    if (!companyId) return;
-    setSaving(true);
-    try {
-      const { updateMonitoringSettings } = await import("@/lib/monitoring.functions");
-      await updateMonitoringSettings({
-        data: {
-          companyId,
-          monitoringEnabled: next?.enabled ?? enabled,
-          allowedApps: next?.items ?? items,
-        },
-      });
-      await refetch();
-      qc.invalidateQueries({ queryKey: ["alerts"] });
-      toast.success("Settings saved");
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Card className="p-4 space-y-5">
-      <div>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="font-semibold flex items-center gap-2"><Shield className="w-4 h-4 text-primary" /> AI distraction detection</h2>
-            <p className="text-xs text-muted-foreground mt-1">When staff screens show YouTube, gaming, social or other off-task content, alert the business owner instantly.</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => { setEnabled(!enabled); save({ enabled: !enabled }); }}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${enabled ? "bg-primary" : "bg-muted"}`}
-          >
-            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${enabled ? "translate-x-5" : "translate-x-0.5"}`} />
-          </button>
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        <div>
-          <h3 className="text-sm font-semibold">Allowed apps & websites</h3>
-          <p className="text-xs text-muted-foreground">Add the tools your team should be on (WhatsApp Web, your admin panel, internal CRMs). Anything else flagged as non-work triggers an alert.</p>
-        </div>
-        <div className="grid sm:grid-cols-[1fr_1fr_auto] gap-2">
-          <Input placeholder="Label e.g. WhatsApp Web" value={label} onChange={(e) => setLabel(e.target.value)} />
-          <Input placeholder="https://web.whatsapp.com" value={url} onChange={(e) => setUrl(e.target.value)} />
-          <Button
-            disabled={!label.trim() || !url.trim() || saving}
-            onClick={() => {
-              const next = [...items, { label: label.trim(), url: url.trim() }];
-              setItems(next);
-              setLabel(""); setUrl("");
-              save({ items: next });
-            }}
-          >
-            Add
-          </Button>
-        </div>
-        <div className="space-y-1.5">
-          {items.length === 0 && <p className="text-xs text-muted-foreground">No allowed apps yet — AI will flag any non-work content.</p>}
-          {items.map((it, i) => (
-            <div key={i} className="flex items-center justify-between gap-2 p-2 rounded bg-muted text-sm">
-              <div className="min-w-0">
-                <div className="font-medium truncate">{it.label}</div>
-                <div className="text-xs text-muted-foreground truncate">{it.url}</div>
-              </div>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => {
-                  const next = items.filter((_, j) => j !== i);
-                  setItems(next);
-                  save({ items: next });
-                }}
-              >
-                <XCircle className="w-4 h-4" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      </div>
-    </Card>
-  );
-}
+              {(!rows || rows.lengt
