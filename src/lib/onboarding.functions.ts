@@ -79,7 +79,7 @@ export const setupCompany = createServerFn({ method: "POST" })
     // 4. Create company
     // ----------------------------------------------------------
 
-        const { data: company, error: companyError } = await supabaseAdmin
+    const { data: company, error: companyError } = await supabaseAdmin
       .from("companies")
       .insert({
         name: data.name,
@@ -88,7 +88,6 @@ export const setupCompany = createServerFn({ method: "POST" })
         invite_code: inviteCode,
         owner_id: userId,
         onboarded: false,
-        trial_ends_at: new Date(Date.now() + 7 * 86400000).toISOString(),
       })
       .select("*")
       .single();

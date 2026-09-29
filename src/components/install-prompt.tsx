@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { X, Share } from "lucide-react";
+import { Download, X, Share } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { BrandMark } from "@/components/brand";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -27,7 +26,7 @@ export function InstallPrompt() {
     };
     window.addEventListener("beforeinstallprompt", onPrompt);
 
-    // iOS Safari fallback
+    // iOS Safari fallback (no beforeinstallprompt)
     const ua = window.navigator.userAgent;
     const isIos = /iphone|ipad|ipod/i.test(ua);
     const isSafari = /^((?!chrome|crios|fxios).)*safari/i.test(ua);
@@ -55,27 +54,27 @@ export function InstallPrompt() {
   }
 
   return (
-    <div className="fixed inset-x-3 bottom-20 md:bottom-4 md:left-auto md:right-4 md:w-80 z-50 bg-white border border-border/80 shadow-2xl rounded-2xl p-4 flex items-start gap-3 animate-in slide-in-from-bottom">
-      <BrandMark className="w-11 h-11" />
-
+    <div className="fixed inset-x-3 bottom-20 md:bottom-4 md:left-auto md:right-4 md:w-80 z-50 bg-card border border-primary/30 shadow-xl rounded-2xl p-4 flex items-start gap-3 animate-in slide-in-from-bottom">
+      <div className="w-10 h-10 rounded-xl bg-primary/15 grid place-items-center shrink-0">
+        <Download className="w-5 h-5 text-primary" />
+      </div>
       <div className="flex-1 min-w-0">
-        <div className="font-semibold text-sm text-foreground">Install TillTask</div>
-        <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+        <div className="font-semibold text-sm">Install TillTask</div>
+        <p className="text-xs text-muted-foreground mt-0.5">
           {iosHint ? (
             <>
-              Tap <Share className="inline w-3 h-3 mx-0.5" /> Share, then tap "Add to Home Screen".
+              Tap <Share className="inline w-3 h-3 mx-0.5" /> Share, then "Add to Home Screen".
             </>
           ) : (
-            "Add to home screen for fast one-tap daily clock-in."
+            "Get a one-tap app icon with offline-friendly access."
           )}
         </p>
         {!iosHint && (
-          <Button size="sm" className="mt-2.5 h-8 text-xs font-semibold" onClick={install}>
-            Install App
+          <Button size="sm" className="mt-2 h-8" onClick={install}>
+            Install app
           </Button>
         )}
       </div>
-
       <button
         onClick={dismiss}
         className="text-muted-foreground hover:text-foreground p-1 -m-1"
