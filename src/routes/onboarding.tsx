@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   Copy,
   Rocket,
-  Briefcase,
   Clock,
   Camera,
   ChevronRight,
@@ -131,8 +130,6 @@ function OnboardingPage() {
     if (!newCompanyId) return;
     setBusy(true);
     try {
-      // settings are stored client-side as part of the seed config for now;
-      // backend onboarding flag flips on completion.
       await complete({ data: { companyId: newCompanyId } });
       toast.success("Tracking activated");
       setStep(4);
@@ -152,9 +149,9 @@ function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden w-full max-w-full">
       {/* Top bar */}
-      <header className="border-b bg-card/50 backdrop-blur sticky top-0 z-10">
+      <header className="border-b bg-card/50 backdrop-blur sticky top-0 z-10 w-full">
         <div className="max-w-5xl mx-auto px-3 sm:px-4 py-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <BrandLockup className="h-7" />
@@ -169,12 +166,12 @@ function OnboardingPage() {
         </div>
       </header>
 
-      <div className="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-8 grid lg:grid-cols-[260px_1fr] gap-4 lg:gap-8">
+      <div className="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-8 grid lg:grid-cols-[260px_1fr] gap-4 lg:gap-8 w-full min-w-0">
         {/* Stepper */}
         <Stepper step={step} />
 
         {/* Step content */}
-        <div>
+        <div className="min-w-0 w-full">
           {step === 1 && (
             <StepCard
               icon={Building2}
@@ -216,12 +213,12 @@ function OnboardingPage() {
                   </div>
                 </div>
                 <div className="flex justify-end pt-2">
-                  <Button type="submit" disabled={busy}>
+                  <Button type="submit" disabled={busy} className="w-full sm:w-auto">
                     {busy ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
                       <>
-                        Continue <ChevronRight className="w-4 h-4" />
+                        Continue <ChevronRight className="w-4 h-4 ml-1" />
                       </>
                     )}
                   </Button>
@@ -234,75 +231,105 @@ function OnboardingPage() {
             <StepCard
               icon={Users}
               title="Invite your team"
-              sub="We'll generate a unique invite code per staff member. Share with them — they sign up via the Staff tab."
+              sub="Generate a unique invite code per staff member. They sign up via the Staff tab."
             >
               <div className="space-y-3 mb-4">
                 {emps.map((e, i) => (
-                  <div key={i} className="grid grid-cols-12 gap-2">
-                    <Input
-                      className="col-span-12 sm:col-span-4"
-                      placeholder="Name"
-                      value={e.name}
-                      onChange={(ev) => {
-                        const c = [...emps];
-                        c[i].name = ev.target.value;
-                        setEmps(c);
-                      }}
-                    />
-                    <Input
-                      className="col-span-7 sm:col-span-4"
-                      placeholder="Email (optional)"
-                      value={e.email}
-                      onChange={(ev) => {
-                        const c = [...emps];
-                        c[i].email = ev.target.value;
-                        setEmps(c);
-                      }}
-                    />
-                    <Input
-                      className="col-span-4 sm:col-span-3"
-                      placeholder="Role"
-                      value={e.jobTitle}
-                      onChange={(ev) => {
-                        const c = [...emps];
-                        c[i].jobTitle = ev.target.value;
-                        setEmps(c);
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="col-span-1"
-                      onClick={() => setEmps(emps.filter((_, idx) => idx !== i))}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                  <div
+                    key={i}
+                    className="p-3 rounded-lg border bg-card/60 space-y-2.5 sm:space-y-0 sm:grid sm:grid-cols-12 sm:gap-2 sm:items-center"
+                  >
+                    <div className="flex items-center justify-between sm:hidden">
+                      <span className="text-xs font-semibold text-muted-foreground">Staff #{i + 1}</span>
+                      {emps.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-destructive hover:text-destructive"
+                          onClick={() => setEmps(emps.filter((_, idx) => idx !== i))}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="sm:col-span-4 min-w-0">
+                      <Input
+                        placeholder="Full name"
+                        value={e.name}
+                        onChange={(ev) => {
+                          const c = [...emps];
+                          c[i].name = ev.target.value;
+                          setEmps(c);
+                        }}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 sm:contents">
+                      <div className="sm:col-span-4 min-w-0">
+                        <Input
+                          placeholder="Email (optional)"
+                          value={e.email}
+                          onChange={(ev) => {
+                            const c = [...emps];
+                            c[i].email = ev.target.value;
+                            setEmps(c);
+                          }}
+                        />
+                      </div>
+                      <div className="sm:col-span-3 min-w-0">
+                        <Input
+                          placeholder="Role"
+                          value={e.jobTitle}
+                          onChange={(ev) => {
+                            const c = [...emps];
+                            c[i].jobTitle = ev.target.value;
+                            setEmps(c);
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="hidden sm:flex sm:col-span-1 justify-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 text-muted-foreground hover:text-destructive"
+                        onClick={() => setEmps(emps.filter((_, idx) => idx !== i))}
+                        disabled={emps.length === 1 && !e.name}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
+
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setEmps([...emps, { name: "", email: "", jobTitle: "" }])}
-                  className="w-full"
+                  className="w-full text-xs sm:text-sm h-9"
                 >
-                  <Plus className="w-4 h-4" /> Add another
+                  <Plus className="w-3.5 h-3.5 mr-1.5" /> Add another team member
                 </Button>
               </div>
-              <div className="flex justify-between gap-2 pt-2">
-                <Button variant="ghost" onClick={() => setStep(1)}>
-                  <ChevronLeft className="w-4 h-4" /> Back
+
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-between gap-2 pt-3 border-t">
+                <Button variant="ghost" size="sm" onClick={() => setStep(1)} className="w-full sm:w-auto">
+                  <ChevronLeft className="w-4 h-4 mr-1" /> Back
                 </Button>
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => setStep(3)}>
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                  <Button variant="outline" size="sm" onClick={() => setStep(3)} className="w-full sm:w-auto">
                     Skip
                   </Button>
-                  <Button onClick={submitEmps} disabled={busy}>
+                  <Button onClick={submitEmps} disabled={busy} className="w-full sm:w-auto">
                     {busy ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
                       <>
-                        Generate codes <ChevronRight className="w-4 h-4" />
+                        Generate codes <ChevronRight className="w-4 h-4 ml-1" />
                       </>
                     )}
                   </Button>
@@ -315,20 +342,20 @@ function OnboardingPage() {
             <StepCard
               icon={Clock}
               title="Activate attendance & tracking"
-              sub="Enable the features your team needs. You can change these any time from Settings."
+              sub="Enable features your team needs. You can change these anytime in Settings."
             >
               <div className="space-y-3 mb-5">
                 <Toggle
                   icon={Clock}
                   title="Time tracking"
-                  sub="Clock in/out, breaks, automatic active vs idle calculation."
+                  sub="Clock in/out, breaks, active vs idle duration."
                   on={trackingEnabled}
                   setOn={setTrackingEnabled}
                 />
                 <Toggle
                   icon={Camera}
                   title="Periodic screenshots"
-                  sub="Capture work-context screenshots for admin review."
+                  sub="Lightweight work-context snapshots for admin review."
                   on={screenshotsEnabled}
                   setOn={setScreenshotsEnabled}
                 />
@@ -340,16 +367,17 @@ function OnboardingPage() {
                   setOn={setAutoBreaks}
                 />
               </div>
-              <div className="flex justify-between gap-2 pt-2">
-                <Button variant="ghost" onClick={() => setStep(2)}>
-                  <ChevronLeft className="w-4 h-4" /> Back
+
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-between gap-2 pt-3 border-t">
+                <Button variant="ghost" size="sm" onClick={() => setStep(2)} className="w-full sm:w-auto">
+                  <ChevronLeft className="w-4 h-4 mr-1" /> Back
                 </Button>
-                <Button onClick={activateTracking} disabled={busy}>
+                <Button onClick={activateTracking} disabled={busy} className="w-full sm:w-auto">
                   {busy ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     <>
-                      Activate tracking <Rocket className="w-4 h-4" />
+                      Activate tracking <Rocket className="w-4 h-4 ml-1.5" />
                     </>
                   )}
                 </Button>
@@ -365,7 +393,7 @@ function OnboardingPage() {
               success
             >
               <div className="space-y-4">
-                <div className="grid sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   <SuccessTile icon={Building2} title="Company created" />
                   <SuccessTile
                     icon={Users}
@@ -375,15 +403,18 @@ function OnboardingPage() {
                 </div>
 
                 {companyInviteCode && (
-                  <div className="p-4 rounded-lg bg-primary/10 border border-primary/30">
+                  <div className="p-3.5 sm:p-4 rounded-lg bg-primary/10 border border-primary/30">
                     <div className="text-xs uppercase font-semibold text-primary mb-1">
                       Company-wide invite code
                     </div>
-                    <div className="flex items-center justify-between">
-                      <code className="text-lg font-mono font-bold">{companyInviteCode}</code>
+                    <div className="flex items-center justify-between gap-2">
+                      <code className="text-base sm:text-lg font-mono font-bold break-all">
+                        {companyInviteCode}
+                      </code>
                       <Button
                         size="sm"
                         variant="ghost"
+                        className="shrink-0 h-8 px-2.5"
                         onClick={() => {
                           navigator.clipboard.writeText(companyInviteCode);
                           toast.success("Copied");
@@ -399,30 +430,31 @@ function OnboardingPage() {
                 )}
 
                 {issuedInvites.length > 0 && (
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                     <div className="text-sm font-semibold">Per-employee codes</div>
                     {issuedInvites.map((inv) => (
                       <div
                         key={inv.code}
-                        className="flex items-center justify-between p-2.5 rounded-lg bg-muted text-sm"
+                        className="flex items-center justify-between p-2.5 rounded-lg bg-muted text-sm gap-2"
                       >
-                        <div>
-                          <div className="font-medium">{inv.intended_name ?? "—"}</div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium truncate">{inv.intended_name ?? "—"}</div>
                           {inv.job_title && (
-                            <div className="text-xs text-muted-foreground">{inv.job_title}</div>
+                            <div className="text-xs text-muted-foreground truncate">{inv.job_title}</div>
                           )}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <code className="font-mono text-xs">{inv.code}</code>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <code className="font-mono text-xs font-semibold">{inv.code}</code>
                           <Button
                             size="sm"
                             variant="ghost"
+                            className="h-7 w-7 p-0"
                             onClick={() => {
                               navigator.clipboard.writeText(inv.code);
                               toast.success("Copied");
                             }}
                           >
-                            <Copy className="w-3 h-3" />
+                            <Copy className="w-3.5 h-3.5" />
                           </Button>
                         </div>
                       </div>
@@ -431,7 +463,7 @@ function OnboardingPage() {
                 )}
 
                 <Button onClick={() => navigate({ to: "/" })} className="w-full" size="lg">
-                  Go to dashboard <ChevronRight className="w-4 h-4" />
+                  Go to dashboard <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               </div>
             </StepCard>
@@ -446,7 +478,6 @@ function Stepper({ step }: { step: Step }) {
   const scrollerRef = useRef<HTMLOListElement | null>(null);
   const itemRefs = useRef<Array<HTMLLIElement | null>>([]);
 
-  // Auto-scroll active step into view on mobile (horizontal scroller)
   useEffect(() => {
     const el = itemRefs.current[step - 1];
     if (!el) return;
@@ -454,10 +485,10 @@ function Stepper({ step }: { step: Step }) {
   }, [step]);
 
   return (
-    <aside className="lg:sticky lg:top-20 self-start -mx-4 lg:mx-0 lg:w-auto">
+    <aside className="lg:sticky lg:top-20 self-start -mx-3 sm:-mx-4 lg:mx-0 w-[calc(100%+1.5rem)] sm:w-[calc(100%+2rem)] lg:w-auto overflow-hidden">
       <ol
         ref={scrollerRef}
-        className="flex lg:flex-col gap-2 lg:gap-1 overflow-x-auto lg:overflow-visible px-4 lg:px-0 snap-x snap-mandatory scrollbar-none"
+        className="flex lg:flex-col gap-2 lg:gap-1 overflow-x-auto lg:overflow-visible px-3 sm:px-4 lg:px-0 snap-x snap-mandatory scrollbar-none"
         style={{ scrollbarWidth: "none" }}
       >
         {STEPS.map((s, i) => {
@@ -470,12 +501,12 @@ function Stepper({ step }: { step: Step }) {
               ref={(el) => {
                 itemRefs.current[i] = el;
               }}
-              className={`shrink-0 snap-center flex items-center gap-3 p-2.5 rounded-lg w-[78vw] sm:w-[280px] lg:w-auto lg:min-w-0 transition-colors ${
+              className={`shrink-0 snap-center flex items-center gap-2.5 sm:gap-3 p-2 sm:p-2.5 rounded-lg w-[70vw] sm:w-[240px] lg:w-full transition-colors ${
                 active ? "bg-primary/10 border border-primary/20" : "border border-transparent"
               }`}
             >
               <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${
+                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${
                   done
                     ? "bg-success text-success-foreground"
                     : active
@@ -483,13 +514,16 @@ function Stepper({ step }: { step: Step }) {
                       : "bg-muted text-muted-foreground"
                 }`}
               >
-                {done ? <CheckCircle2 className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
+                {done ? <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Icon className="w-3.5 h-3
+5 h-3.5 sm:w-4 sm:h-4" />}
               </div>
               <div className="min-w-0">
-                <div className={`text-sm font-medium truncate ${active ? "" : "text-muted-foreground"}`}>
+                <div className={`text-xs sm:text-sm font-medium truncate ${active ? "" : "text-muted-foreground"}`}>
                   {s.title}
                 </div>
-                <div className="text-[11px] text-muted-foreground truncate">{s.sub}</div>
+                <div className="text-[10px] sm:text-[11px] text-muted-foreground truncate">
+                  {s.sub}
+                </div>
               </div>
             </li>
           );
@@ -513,18 +547,18 @@ function StepCard({
   success?: boolean;
 }) {
   return (
-    <Card className="p-6 sm:p-8">
-      <div className="flex items-start gap-3 mb-5">
+    <Card className="w-full max-w-full overflow-hidden p-4 sm:p-6 md:p-8">
+      <div className="flex items-start gap-3 mb-4 sm:mb-5">
         <div
-          className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+          className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 ${
             success ? "bg-success/15 text-success" : "bg-primary/15 text-primary"
           }`}
         >
-          <Icon className="w-5 h-5" />
+          <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
         </div>
-        <div>
-          <h1 className="text-xl font-bold leading-tight">{title}</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{sub}</p>
+        <div className="min-w-0 flex-1">
+          <h1 className="text-lg sm:text-xl font-bold leading-tight">{title}</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{sub}</p>
         </div>
       </div>
       {children}
@@ -549,7 +583,7 @@ function Toggle({
     <button
       type="button"
       onClick={() => setOn(!on)}
-      className={`w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-colors ${
+      className={`w-full max-w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-colors ${
         on ? "border-primary/40 bg-primary/5" : "hover:bg-muted/60"
       }`}
     >
@@ -560,10 +594,12 @@ function Toggle({
       >
         <Icon className="w-4 h-4" />
       </div>
+
       <div className="flex-1 min-w-0">
         <div className="font-medium text-sm">{title}</div>
         <div className="text-xs text-muted-foreground">{sub}</div>
       </div>
+
       <div
         className={`w-10 h-6 rounded-full p-0.5 transition-colors shrink-0 ${
           on ? "bg-primary" : "bg-muted"
