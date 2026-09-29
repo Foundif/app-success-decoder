@@ -267,19 +267,15 @@ function AppShell({ role }: { role: AppRole }) {
       </aside>
 
       <div className="flex-1 min-w-0 pb-24 lg:pb-0">
-                <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-border">
+                        <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-border">
           <div className="max-w-screen-xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 lg:hidden min-w-0">
-  <MobileMenuTrigger />
-  <img src={LOGO_URL} alt="TillTask" className="h-7 w-auto object-contain shrink-0" />
-  <span className="text-[11px] text-muted-foreground capitalize truncate ml-1">
-    ({role.replace("_", " ")})
-  </span>
-</div>
-
-              </div>
+              <MobileMenuTrigger />
+              <img src={LOGO_URL} alt="TillTask" className="h-7 w-auto object-contain shrink-0" />
+              <span className="text-[11px] text-muted-foreground capitalize truncate ml-1">
+                ({role.replace("_", " ")})
+              </span>
             </div>
-            {/* remaining header buttons... */}
 
             <div className="hidden lg:block font-semibold capitalize">{tab}</div>
             <div className="flex items-center gap-2">
@@ -317,6 +313,7 @@ function AppShell({ role }: { role: AppRole }) {
             </div>
           </div>
         </header>
+
 
         <main className="max-w-screen-xl mx-auto px-4 py-6">
           {tab === "home" && <HomeTab role={role} />}
