@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard,
+  Home,
   Users,
   Camera,
   DollarSign,
@@ -45,7 +45,7 @@ export function consumePendingTab(): string | null {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { id: "home", label: "Dashboard", icon: LayoutDashboard, to: "/", tab: "home", allow: ["super_admin", "company_admin", "employee"] },
+  { id: "home", label: "Home", icon: Home, to: "/", tab: "home", allow: ["super_admin", "company_admin", "employee"] },
   { id: "team", label: "Team", icon: Users, to: "/", tab: "team", allow: ["super_admin", "company_admin"] },
   { id: "screens", label: "Screens", icon: Camera, to: "/", tab: "screens", allow: ["super_admin", "company_admin", "employee"] },
   { id: "payroll", label: "Payroll", icon: DollarSign, to: "/", tab: "payroll", allow: ["super_admin", "company_admin", "employee"], gate: (p) => p.payroll },
