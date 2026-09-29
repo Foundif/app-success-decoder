@@ -2755,11 +2755,12 @@ function ScreenshotImage({ src }: { src: string | null | undefined }) {
 }
 
 // ===== Trial progress banner =====
+// ===== Trial progress banner =====
 function TrialBanner() {
   const plan = usePlan();
   const navigate = useNavigate();
   if (plan.status !== "trial" || !plan.isActive) return null;
-  const TOTAL = 14;
+  const TOTAL = 7; // <-- changed from 14 to 7
   const used = Math.max(0, TOTAL - plan.daysLeft);
   const pct = Math.min(100, Math.round((used / TOTAL) * 100));
   return (
@@ -2767,7 +2768,7 @@ function TrialBanner() {
       <div className="flex items-center justify-between gap-3 mb-2">
         <div>
           <div className="text-sm font-semibold">Free trial · {plan.daysLeft} day{plan.daysLeft === 1 ? "" : "s"} left</div>
-          <div className="text-xs text-muted-foreground">All features unlocked for 14 days. Subscribe to keep your team productive.</div>
+          <div className="text-xs text-muted-foreground">All features unlocked for 7 days. Subscribe to keep your team productive.</div>
         </div>
         <Button size="sm" onClick={() => navigate({ to: "/pricing" })}>Upgrade</Button>
       </div>
@@ -2778,6 +2779,7 @@ function TrialBanner() {
     </Card>
   );
 }
+
 
 // ===== Monitoring settings (admin) =====
 function MonitoringSettingsCard() {
