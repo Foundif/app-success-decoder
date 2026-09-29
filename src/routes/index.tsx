@@ -270,13 +270,13 @@ function AppShell({ role }: { role: AppRole }) {
                 <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-border">
           <div className="max-w-screen-xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 lg:hidden min-w-0">
-              <MobileMenuTrigger />
-              <BrandMark className="w-9 h-9" />
-              <div className="min-w-0">
-                <div className="font-bold text-sm leading-none truncate text-foreground">TillTask</div>
-                <div className="text-[11px] text-muted-foreground capitalize truncate mt-0.5">
-                  {role.replace("_", " ")}
-                </div>
+  <MobileMenuTrigger />
+  <img src={LOGO_URL} alt="TillTask" className="h-7 w-auto object-contain shrink-0" />
+  <span className="text-[11px] text-muted-foreground capitalize truncate ml-1">
+    ({role.replace("_", " ")})
+  </span>
+</div>
+
               </div>
             </div>
             {/* remaining header buttons... */}
