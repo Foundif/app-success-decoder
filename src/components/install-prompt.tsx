@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { X, Share } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { MARK_URL } from "@/components/brand";
+import { BrandMark } from "@/components/brand";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -56,15 +56,7 @@ export function InstallPrompt() {
 
   return (
     <div className="fixed inset-x-3 bottom-20 md:bottom-4 md:left-auto md:right-4 md:w-80 z-50 bg-white border border-border/80 shadow-2xl rounded-2xl p-4 flex items-start gap-3 animate-in slide-in-from-bottom">
-      {/* TillTask "T" Mark Tile */}
-      <div className="w-11 h-11 rounded-xl bg-white border border-border/60 shadow-xs grid place-items-center shrink-0 p-1.5 overflow-hidden">
-        <img
-          src={MARK_URL}
-          alt="TillTask"
-          className="w-full h-full object-contain"
-          draggable={false}
-        />
-      </div>
+      <BrandMark className="w-11 h-11" />
 
       <div className="flex-1 min-w-0">
         <div className="font-semibold text-sm text-foreground">Install TillTask</div>
