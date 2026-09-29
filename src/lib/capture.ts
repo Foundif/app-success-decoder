@@ -165,6 +165,8 @@ export class CaptureSession {
     }
     // Store the STORAGE PATH (not a 7-day signed URL). The viewer signs on demand,
     // so screenshots keep loading after any deployment / past expiry.
+    // Replace lines 178-201 in src/lib/capture.ts:
+    // Store the STORAGE PATH (not a 7-day signed URL). The viewer signs on demand.
     await supabase.from("screenshots").insert({
       user_id: this.opts.userId,
       company_id: this.opts.companyId,
@@ -175,11 +177,10 @@ export class CaptureSession {
       status: "pending",
     });
 
-    // Run AI distraction check on roughly every 6th snapshot (~1 per minute)
     this.snapCount++;
-    if (this.snapCount % 6 === 1) {
-      this.runAiCheck(blob).catch(() => {});
-    }
+    // AI distraction check removed: capture is now 100% private, instant, and zero-latency.
+  }
+
   }
 
   private async runAiCheck(blob: Blob) {
