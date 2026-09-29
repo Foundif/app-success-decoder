@@ -90,7 +90,7 @@ export class CaptureSession {
       console.warn("MediaRecorder unsupported", e);
     }
 
-    // 1fps snapshot
+    // periodic snapshot
     this.snapTimer = window.setInterval(() => this.snapshot(), SNAPSHOT_INTERVAL_MS);
     // Fire one immediately
     setTimeout(() => this.snapshot(), 1500);
@@ -163,9 +163,6 @@ export class CaptureSession {
       console.warn("snapshot upload failed", error.message);
       return;
     }
-    // Store the STORAGE PATH (not a 7-day signed URL). The viewer signs on demand,
-    // so screenshots keep loading after any deployment / past expiry.
-    // Replace lines 178-201 in src/lib/capture.ts:
     // Store the STORAGE PATH (not a 7-day signed URL). The viewer signs on demand.
     await supabase.from("screenshots").insert({
       user_id: this.opts.userId,
@@ -178,26 +175,6 @@ export class CaptureSession {
     });
 
     this.snapCount++;
-    // AI distraction check removed: capture is now 100% private, instant, and zero-latency.
-  }
-
-  }
-
-  private async runAiCheck(blob: Blob) {
-    try {
-      const b64 = await blobToBase64(blob);
-      const { analyzeSnapshot } = await import("@/lib/monitoring.functions");
-      await analyzeSnapshot({
-        data: {
-          companyId: this.opts.companyId,
-          attendanceId: this.opts.attendanceId ?? null,
-          imageBase64: b64,
-          mime: "image/webp",
-        },
-      });
-    } catch (e) {
-      // silent — AI is best-effort
-    }
   }
 
   // ============ alerts ============
@@ -271,7 +248,6 @@ export class CaptureSession {
   }
   private async fulfillClip(requestId: string, duration: number) {
     if (!this.recorder || this.chunks.length === 0) return;
-    // Force flush
     try {
       this.recorder.requestData?.();
     } catch {}
@@ -310,18 +286,4 @@ export class CaptureSession {
       .eq("id", requestId);
     this.opts.onAlert?.("info", "Sent requested clip to admin");
   }
-}
-
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onloadend = () => {
-      const s = String(r.result ?? "");
-      // strip data:...;base64, prefix
-      const i = s.indexOf(",");
-      resolve(i >= 0 ? s.slice(i + 1) : s);
-    };
-    r.onerror = () => reject(r.error);
-    r.readAsDataURL(blob);
-  });
 }
