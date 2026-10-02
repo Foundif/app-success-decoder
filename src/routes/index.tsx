@@ -48,29 +48,11 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-  SheetDescription,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-} from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -180,11 +162,7 @@ function HomeGate() {
       }
       // Only redirect if the company hasn't completed onboarding
       (async () => {
-        const { data } = await supabase
-          .from("companies")
-          .select("onboarded")
-          .eq("id", companyId)
-          .maybeSingle();
+        const { data } = await supabase.from("companies").select("onboarded").eq("id", companyId).maybeSingle();
         if (data && data.onboarded === false) {
           setNeedsOnboarding(true);
           navigate({ to: "/onboarding" });
@@ -271,9 +249,7 @@ function AppShell({ role }: { role: AppRole }) {
                 key={it.id}
                 onClick={() => go(it)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[15px] font-medium transition-colors ${
-                  active
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                  active ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                 }`}
               >
                 <Icon className="w-5 h-5 shrink-0" />
@@ -287,19 +263,13 @@ function AppShell({ role }: { role: AppRole }) {
             <div className="rounded-2xl border bg-muted/50 p-3 space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-sm font-semibold">
-                  <span
-                    className={`w-2 h-2 rounded-full ${
-                      plan.isActive ? "bg-success" : "bg-destructive"
-                    }`}
-                  />
+                  <span className={`w-2 h-2 rounded-full ${plan.isActive ? "bg-success" : "bg-destructive"}`} />
                   <DollarSign className="w-4 h-4 text-primary" />
                   {planLabel}
                 </div>
                 <span className="text-[10px] text-muted-foreground font-medium">{planSub}</span>
               </div>
-              <div className="text-xs text-muted-foreground truncate">
-                {profile?.full_name ?? profile?.email}
-              </div>
+              <div className="text-xs text-muted-foreground truncate">{profile?.full_name ?? profile?.email}</div>
               {(plan.readonly || !plan.tier || plan.status === "trial") && (
                 <button
                   onClick={() => navigate({ to: "/pricing" })}
@@ -428,11 +398,7 @@ function AdminHome() {
     enabled: !!companyId,
     queryKey: ["company", companyId],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("companies")
-        .select("*")
-        .eq("id", companyId!)
-        .maybeSingle();
+      const { data } = await supabase.from("companies").select("*").eq("id", companyId!).maybeSingle();
       return data;
     },
   });
@@ -553,9 +519,7 @@ function EmployeeHome() {
   const runStartRef = useRef<number | null>(null);
 
   const computeSeconds = useCallback(() => {
-    const running = runStartRef.current
-      ? Math.floor((Date.now() - runStartRef.current) / 1000)
-      : 0;
+    const running = runStartRef.current ? Math.floor((Date.now() - runStartRef.current) / 1000) : 0;
     return baseRef.current + Math.max(0, running);
   }, []);
 
@@ -818,9 +782,8 @@ function EmployeeHome() {
         </div>
         {captureError && <p className="text-[11px] text-destructive mt-3">{captureError}</p>}
         <p className="text-[11px] text-muted-foreground mt-3 max-w-md mx-auto">
-          When you clock in, your browser will ask permission to share your screen. Snapshots
-          (~50 KB each) are taken every 10s. A short clip is uploaded only if your admin
-          requests one.
+          When you clock in, your browser will ask permission to share your screen. Snapshots (~50 KB each) are taken
+          every 10s. A short clip is uploaded only if your admin requests one.
         </p>
       </Card>
 
@@ -869,9 +832,7 @@ function TeamTab() {
         .select("id, full_name, email, job_title, phone")
         .eq("company_id", companyId!);
       // Exclude the current admin's own profile and any placeholder rows with no name and no email
-      return (data ?? []).filter(
-        (m) => m.id !== user?.id && (m.full_name?.trim() || m.email?.trim()),
-      );
+      return (data ?? []).filter((m) => m.id !== user?.id && (m.full_name?.trim() || m.email?.trim()));
     },
   });
   const { data: invites } = useQuery({
@@ -890,12 +851,22 @@ function TeamTab() {
   return (
     <Tabs defaultValue="members" className="space-y-5">
       <TabsList className="w-full justify-start overflow-x-auto h-auto p-1">
-        <TabsTrigger value="members"><Users className="w-3.5 h-3.5" /> Members</TabsTrigger>
-        <TabsTrigger value="attendance"><Clock className="w-3.5 h-3.5" /> Attendance</TabsTrigger>
-        <TabsTrigger value="clips"><Video className="w-3.5 h-3.5" /> Clips</TabsTrigger>
+        <TabsTrigger value="members">
+          <Users className="w-3.5 h-3.5" /> Members
+        </TabsTrigger>
+        <TabsTrigger value="attendance">
+          <Clock className="w-3.5 h-3.5" /> Attendance
+        </TabsTrigger>
+        <TabsTrigger value="clips">
+          <Video className="w-3.5 h-3.5" /> Clips
+        </TabsTrigger>
         {/* FIX: this trigger was missing, so the Monitoring tab was unreachable */}
-        <TabsTrigger value="monitoring"><Shield className="w-3.5 h-3.5" /> Monitoring</TabsTrigger>
-        <TabsTrigger value="invites"><KeyRound className="w-3.5 h-3.5" /> Invites</TabsTrigger>
+        <TabsTrigger value="monitoring">
+          <Shield className="w-3.5 h-3.5" /> Monitoring
+        </TabsTrigger>
+        <TabsTrigger value="invites">
+          <KeyRound className="w-3.5 h-3.5" /> Invites
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="members" className="space-y-5">
@@ -983,9 +954,7 @@ function ScreensTab({ role }: { role: AppRole }) {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const queryKey = isAdmin
-    ? ["screens-co", companyId, filter]
-    : ["screens-me", user?.id, filter];
+  const queryKey = isAdmin ? ["screens-co", companyId, filter] : ["screens-me", user?.id, filter];
 
   const { data: screens } = useQuery({
     enabled: !!(isAdmin ? companyId : user),
@@ -993,9 +962,7 @@ function ScreensTab({ role }: { role: AppRole }) {
     queryFn: async () => {
       let q = supabase
         .from("screenshots")
-        .select(
-          "id, captured_at, activity_label, app_name, status, image_url, user_id, review_note, reviewed_at",
-        )
+        .select("id, captured_at, activity_label, app_name, status, image_url, user_id, review_note, reviewed_at")
         .order("captured_at", { ascending: false })
         .limit(100);
       q = isAdmin ? q.eq("company_id", companyId!) : q.eq("user_id", user!.id);
@@ -1065,9 +1032,7 @@ function ScreensTab({ role }: { role: AppRole }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="font-semibold text-lg">
-            {isAdmin ? "Screenshot review queue" : "My screenshots"}
-          </h2>
+          <h2 className="font-semibold text-lg">{isAdmin ? "Screenshot review queue" : "My screenshots"}</h2>
           <p className="text-xs text-muted-foreground">
             {isAdmin
               ? "Approve or reject captured screenshots. All decisions are recorded in audit logs."
@@ -1112,25 +1077,15 @@ function ScreensTab({ role }: { role: AppRole }) {
               <ScreenshotImage src={s.image_url} />
             </div>
             <div className="flex items-center justify-between mb-1">
-              <div className="text-xs font-medium truncate">
-                {s.app_name ?? s.activity_label ?? "Activity"}
-              </div>
+              <div className="text-xs font-medium truncate">{s.app_name ?? s.activity_label ?? "Activity"}</div>
               <Badge
-                variant={
-                  s.status === "approved"
-                    ? "default"
-                    : s.status === "rejected"
-                      ? "destructive"
-                      : "secondary"
-                }
+                variant={s.status === "approved" ? "default" : s.status === "rejected" ? "destructive" : "secondary"}
                 className="text-[10px]"
               >
                 {s.status}
               </Badge>
             </div>
-            <div className="text-[10px] text-muted-foreground mb-2">
-              {new Date(s.captured_at).toLocaleString()}
-            </div>
+            <div className="text-[10px] text-muted-foreground mb-2">{new Date(s.captured_at).toLocaleString()}</div>
             {s.review_note && (
               <div className="text-[11px] p-2 rounded bg-muted/60 mb-2 line-clamp-2">
                 <span className="font-semibold">Note:</span> {s.review_note}
@@ -1142,9 +1097,7 @@ function ScreensTab({ role }: { role: AppRole }) {
                   size="sm"
                   variant="default"
                   className="flex-1 h-8 text-xs"
-                  onClick={() =>
-                    openReview(s.id, "approved", s.app_name ?? s.activity_label ?? "Screenshot")
-                  }
+                  onClick={() => openReview(s.id, "approved", s.app_name ?? s.activity_label ?? "Screenshot")}
                 >
                   <CheckCircle2 className="w-3 h-3" /> Approve
                 </Button>
@@ -1152,9 +1105,7 @@ function ScreensTab({ role }: { role: AppRole }) {
                   size="sm"
                   variant="destructive"
                   className="flex-1 h-8 text-xs"
-                  onClick={() =>
-                    openReview(s.id, "rejected", s.app_name ?? s.activity_label ?? "Screenshot")
-                  }
+                  onClick={() => openReview(s.id, "rejected", s.app_name ?? s.activity_label ?? "Screenshot")}
                 >
                   <XCircle className="w-3 h-3" /> Reject
                 </Button>
@@ -1261,13 +1212,9 @@ function OverviewReport() {
   });
 
   const chart = useMemo(() => {
-    const map = new Map<
-      string,
-      { date: string; active: number; idle: number; score: number; n: number }
-    >();
+    const map = new Map<string, { date: string; active: number; idle: number; score: number; n: number }>();
     (data ?? []).forEach((row) => {
-      const m =
-        map.get(row.work_date) ?? { date: row.work_date, active: 0, idle: 0, score: 0, n: 0 };
+      const m = map.get(row.work_date) ?? { date: row.work_date, active: 0, idle: 0, score: 0, n: 0 };
       m.active += (row.active_seconds ?? 0) / 3600;
       m.idle += (row.idle_seconds ?? 0) / 3600;
       m.score += Number(row.productivity_score ?? 0);
@@ -1375,9 +1322,7 @@ function DrilldownReport() {
     const idlePct = totalLogged ? Math.round((t.idle / totalLogged) * 100) : 0;
     const breakAdherence = calcBreakAdherence(t.break, entries?.length ?? 0);
     const taskProgress = t.total ? Math.round((t.done / t.total) * 100) : 0;
-    const score = Math.round(
-      activePct * 0.45 + breakAdherence * 0.2 + taskProgress * 0.25 + (100 - idlePct) * 0.1,
-    );
+    const score = Math.round(activePct * 0.45 + breakAdherence * 0.2 + taskProgress * 0.25 + (100 - idlePct) * 0.1);
     return { ...t, activePct, idlePct, breakAdherence, taskProgress, score };
   }, [entries]);
 
@@ -1425,9 +1370,7 @@ function DrilldownReport() {
         <Card className="p-5 bg-gradient-to-br from-primary/5 to-accent/20">
           <div className="flex items-start justify-between flex-wrap gap-4">
             <div>
-              <div className="text-xs uppercase text-muted-foreground font-semibold">
-                Productivity score
-              </div>
+              <div className="text-xs uppercase text-muted-foreground font-semibold">Productivity score</div>
               <div className="text-5xl font-bold text-primary mt-1">{summary.score}</div>
               <div className="text-xs text-muted-foreground mt-1">
                 {selectedMember.full_name ?? selectedMember.email} · {from} → {to}
@@ -1442,10 +1385,34 @@ function DrilldownReport() {
       )}
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <DrillStat label="Active time" value={`${(summary.active / 60).toFixed(1)}h`} pct={summary.activePct} accent="primary" sub={`${summary.activePct}% of logged`} />
-        <DrillStat label="Idle time" value={`${(summary.idle / 60).toFixed(1)}h`} pct={summary.idlePct} accent="warning" sub={`${summary.idlePct}% of logged`} />
-        <DrillStat label="Break adherence" value={`${summary.breakAdherence}%`} pct={summary.breakAdherence} accent="success" sub={`${Math.round(summary.break)}m taken`} />
-        <DrillStat label="Task progress" value={`${summary.done}/${summary.total}`} pct={summary.taskProgress} accent="primary" sub={`${summary.taskProgress}% complete`} />
+        <DrillStat
+          label="Active time"
+          value={`${(summary.active / 60).toFixed(1)}h`}
+          pct={summary.activePct}
+          accent="primary"
+          sub={`${summary.activePct}% of logged`}
+        />
+        <DrillStat
+          label="Idle time"
+          value={`${(summary.idle / 60).toFixed(1)}h`}
+          pct={summary.idlePct}
+          accent="warning"
+          sub={`${summary.idlePct}% of logged`}
+        />
+        <DrillStat
+          label="Break adherence"
+          value={`${summary.breakAdherence}%`}
+          pct={summary.breakAdherence}
+          accent="success"
+          sub={`${Math.round(summary.break)}m taken`}
+        />
+        <DrillStat
+          label="Task progress"
+          value={`${summary.done}/${summary.total}`}
+          pct={summary.taskProgress}
+          accent="primary"
+          sub={`${summary.taskProgress}% complete`}
+        />
       </div>
 
       <Card className="p-4">
@@ -1464,9 +1431,7 @@ function DrilldownReport() {
           </ResponsiveContainer>
         </div>
         {dailyChart.length === 0 && (
-          <p className="text-xs text-muted-foreground text-center py-4">
-            No productivity entries in this range.
-          </p>
+          <p className="text-xs text-muted-foreground text-center py-4">No productivity entries in this range.</p>
         )}
       </Card>
     </div>
@@ -1486,8 +1451,7 @@ function DrillStat({
   accent: "primary" | "warning" | "success";
   sub: string;
 }) {
-  const color =
-    accent === "success" ? "bg-success" : accent === "warning" ? "bg-warning" : "bg-primary";
+  const color = accent === "success" ? "bg-success" : accent === "warning" ? "bg-warning" : "bg-primary";
   return (
     <Card className="p-4">
       <div className="text-xs text-muted-foreground">{label}</div>
@@ -1536,10 +1500,7 @@ function AuditLogView() {
     enabled: !!companyId,
     queryKey: ["team-audit", companyId],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("id, full_name, email")
-        .eq("company_id", companyId!);
+      const { data } = await supabase.from("profiles").select("id, full_name, email").eq("company_id", companyId!);
       return data ?? [];
     },
   });
@@ -1668,22 +1629,12 @@ function AuditLogView() {
   );
 }
 
-function AuditRow({
-  row,
-  actor,
-  target,
-}: {
-  row: AuditRowData;
-  actor?: string | null;
-  target?: string | null;
-}) {
+function AuditRow({ row, actor, target }: { row: AuditRowData; actor?: string | null; target?: string | null }) {
   const meta = describeAction(row.action);
   const Icon = meta.icon;
   return (
     <div className="flex items-start gap-3 p-3">
-      <div
-        className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${meta.bg} ${meta.fg}`}
-      >
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${meta.bg} ${meta.fg}`}>
         <Icon className="w-4 h-4" />
       </div>
       <div className="flex-1 min-w-0">
@@ -1693,8 +1644,7 @@ function AuditRow({
           {target && target !== actor && (
             <>
               {" "}
-              <span className="text-muted-foreground">·</span>{" "}
-              <span className="font-medium">{target}</span>
+              <span className="text-muted-foreground">·</span> <span className="font-medium">{target}</span>
             </>
           )}
         </div>
@@ -1765,8 +1715,7 @@ function StatCard({
   accent?: "success" | "warning";
   small?: boolean;
 }) {
-  const color =
-    accent === "success" ? "text-success" : accent === "warning" ? "text-warning" : "text-primary";
+  const color = accent === "success" ? "text-success" : accent === "warning" ? "text-warning" : "text-primary";
   return (
     <Card className="p-3">
       <div className="flex items-center justify-between mb-1">
@@ -1778,13 +1727,7 @@ function StatCard({
   );
 }
 
-function ProductivityBreakdown({
-  companyId,
-  userOnly,
-}: {
-  companyId?: string | null;
-  userOnly?: string;
-}) {
+function ProductivityBreakdown({ companyId, userOnly }: { companyId?: string | null; userOnly?: string }) {
   const { data } = useQuery({
     enabled: !!(companyId || userOnly),
     queryKey: ["prod-breakdown", companyId ?? "u", userOnly ?? "c"],
@@ -1840,8 +1783,18 @@ function ProductivityBreakdown({
         </ResponsiveContainer>
       </div>
       <div className="space-y-3 text-sm">
-        <Metric label="Active time" value={`${totals.active}m`} color="bg-primary" pct={Math.min(100, (totals.active / logged) * 100)} />
-        <Metric label="Idle time" value={`${totals.idle}m`} color="bg-warning" pct={Math.min(100, (totals.idle / logged) * 100)} />
+        <Metric
+          label="Active time"
+          value={`${totals.active}m`}
+          color="bg-primary"
+          pct={Math.min(100, (totals.active / logged) * 100)}
+        />
+        <Metric
+          label="Idle time"
+          value={`${totals.idle}m`}
+          color="bg-warning"
+          pct={Math.min(100, (totals.idle / logged) * 100)}
+        />
         <Metric label="Break adherence" value={`${breakAdherence}%`} color="bg-success" pct={breakAdherence} />
         <Metric label="Task progress" value={`${totals.done}/${totals.total}`} color="bg-primary" pct={taskProgress} />
       </div>
@@ -1884,10 +1837,7 @@ function AlertsBell({ companyId }: { companyId: string }) {
   const { data: profiles } = useQuery({
     queryKey: ["alerts-profiles", companyId],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("id, full_name, email")
-        .eq("company_id", companyId);
+      const { data } = await supabase.from("profiles").select("id, full_name, email").eq("company_id", companyId);
       return data ?? [];
     },
   });
@@ -1918,9 +1868,7 @@ function AlertsBell({ companyId }: { companyId: string }) {
           <SheetTitle className="flex items-center gap-2">
             <Bell className="w-4 h-4" /> Live alerts
           </SheetTitle>
-          <SheetDescription>
-            Real-time warnings from employee devices. Tap "Resolve" once handled.
-          </SheetDescription>
+          <SheetDescription>Real-time warnings from employee devices. Tap "Resolve" once handled.</SheetDescription>
         </SheetHeader>
         <div className="mt-4 space-y-2">
           {(!alerts || alerts.length === 0) && (
@@ -1980,8 +1928,7 @@ function alertMeta(type: string) {
     return { icon: WifiOff, bg: "bg-destructive/15", fg: "text-destructive", label: "Device offline" };
   if (type === "tab_hidden")
     return { icon: AlertTriangle, bg: "bg-warning/15", fg: "text-warning", label: "Tab hidden" };
-  if (type === "idle")
-    return { icon: Clock, bg: "bg-warning/15", fg: "text-warning", label: "Idle" };
+  if (type === "idle") return { icon: Clock, bg: "bg-warning/15", fg: "text-warning", label: "Idle" };
   return { icon: AlertTriangle, bg: "bg-muted", fg: "text-foreground", label: "Alert" };
 }
 
@@ -2035,8 +1982,8 @@ function TeamMemberRow({
           <DialogHeader>
             <DialogTitle>Request screen clip</DialogTitle>
             <DialogDescription>
-              {member.full_name ?? member.email}'s browser will upload the last 5 minutes of
-              recorded screen activity. The employee must be currently clocked in and recording.
+              {member.full_name ?? member.email}'s browser will upload the last 5 minutes of recorded screen activity.
+              The employee must be currently clocked in and recording.
             </DialogDescription>
           </DialogHeader>
           <Textarea
@@ -2046,7 +1993,9 @@ function TeamMemberRow({
             onChange={(e) => setReason(e.target.value)}
           />
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setClipOpen(false)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setClipOpen(false)}>
+              Cancel
+            </Button>
             <Button onClick={sendClipRequest} disabled={busy}>
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send request"}
             </Button>
@@ -2054,12 +2003,7 @@ function TeamMemberRow({
         </DialogContent>
       </Dialog>
 
-      <CompensationDialog
-        open={compOpen}
-        onOpenChange={setCompOpen}
-        member={member}
-        companyId={companyId}
-      />
+      <CompensationDialog open={compOpen} onOpenChange={setCompOpen} member={member} companyId={companyId} />
     </div>
   );
 }
@@ -2134,8 +2078,8 @@ function CompensationDialog({
         <DialogHeader>
           <DialogTitle>Compensation · {member.full_name ?? member.email}</DialogTitle>
           <DialogDescription>
-            Salary is prorated by worked hours vs expected hours each month. Overtime hours past
-            the expected count are paid at the overtime rate.
+            Salary is prorated by worked hours vs expected hours each month. Overtime hours past the expected count are
+            paid at the overtime rate.
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-3">
@@ -2157,7 +2101,9 @@ function CompensationDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
           <Button onClick={save} disabled={busy}>
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
           </Button>
@@ -2183,10 +2129,7 @@ function AttendanceManager() {
     enabled: !!companyId,
     queryKey: ["att-members", companyId],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("id, full_name, email")
-        .eq("company_id", companyId!);
+      const { data } = await supabase.from("profiles").select("id, full_name, email").eq("company_id", companyId!);
       return data ?? [];
     },
   });
@@ -2197,7 +2140,9 @@ function AttendanceManager() {
     queryFn: async () => {
       let q = supabase
         .from("attendance")
-        .select("id, user_id, work_date, clock_in, clock_out, active_seconds, idle_seconds, break_seconds, status, is_manual, edited_by, edit_reason, edited_at")
+        .select(
+          "id, user_id, work_date, clock_in, clock_out, active_seconds, idle_seconds, break_seconds, status, is_manual, edited_by, edit_reason, edited_at",
+        )
         .eq("company_id", companyId!)
         .gte("work_date", from)
         .lte("work_date", to)
@@ -2231,7 +2176,9 @@ function AttendanceManager() {
             >
               <option value="all">All employees</option>
               {members?.map((m) => (
-                <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>
+                <option key={m.id} value={m.id}>
+                  {m.full_name ?? m.email}
+                </option>
               ))}
             </select>
           </div>
@@ -2275,7 +2222,9 @@ function AttendanceManager() {
                   <td className="p-2 font-mono text-xs">{((r.active_seconds ?? 0) / 3600).toFixed(2)}h</td>
                   <td className="p-2">
                     <div className="flex items-center gap-1">
-                      <Badge variant="secondary" className="text-[10px]">{r.status}</Badge>
+                      <Badge variant="secondary" className="text-[10px]">
+                        {r.status}
+                      </Badge>
                       {r.is_manual && (
                         <Badge variant="outline" className="text-[10px]">
                           <Edit3 className="w-2.5 h-2.5" /> manual
@@ -2391,9 +2340,7 @@ function AttendanceEditDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{editing ? "Edit attendance" : "Manual attendance entry"}</DialogTitle>
-          <DialogDescription>
-            All edits are recorded in the audit log with the reason you provide.
-          </DialogDescription>
+          <DialogDescription>All edits are recorded in the audit log with the reason you provide.</DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5 col-span-2">
@@ -2405,7 +2352,9 @@ function AttendanceEditDialog({
               className="w-full h-9 rounded-md border bg-transparent px-3 text-sm"
             >
               {members.map((m) => (
-                <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>
+                <option key={m.id} value={m.id}>
+                  {m.full_name ?? m.email}
+                </option>
               ))}
             </select>
           </div>
@@ -2427,11 +2376,18 @@ function AttendanceEditDialog({
           </div>
           <div className="space-y-1.5 col-span-2">
             <Label className="text-xs">Reason (required)</Label>
-            <Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Forgot to clock out; correcting based on Slack handover at 6 PM" />
+            <Textarea
+              rows={2}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="e.g. Forgot to clock out; correcting based on Slack handover at 6 PM"
+            />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
           <Button onClick={save} disabled={busy}>
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
           </Button>
@@ -2471,10 +2427,7 @@ function ClipsPanel({ scope }: { scope: "admin" | "employee" }) {
     enabled: scope === "admin" && !!companyId,
     queryKey: ["clip-members", companyId],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("id, full_name, email")
-        .eq("company_id", companyId!);
+      const { data } = await supabase.from("profiles").select("id, full_name, email").eq("company_id", companyId!);
       return data ?? [];
     },
   });
@@ -2486,9 +2439,7 @@ function ClipsPanel({ scope }: { scope: "admin" | "employee" }) {
       const added: Record<string, string> = {};
       for (const c of clips) {
         if (signedUrls[c.id]) continue;
-        const { data } = await supabase.storage
-          .from("recordings")
-          .createSignedUrl(c.storage_path, 3600);
+        const { data } = await supabase.storage.from("recordings").createSignedUrl(c.storage_path, 3600);
         if (data?.signedUrl) added[c.id] = data.signedUrl;
       }
       if (!cancelled && Object.keys(added).length > 0) {
@@ -2535,7 +2486,9 @@ function ClipsPanel({ scope }: { scope: "admin" | "employee" }) {
             )}
             <div className="text-[10px] text-muted-foreground flex items-center justify-between">
               <span>{new Date(c.captured_at).toLocaleString()}</span>
-              <span>{(c.size_bytes / 1024 / 1024).toFixed(2)} MB · {c.duration_seconds}s</span>
+              <span>
+                {(c.size_bytes / 1024 / 1024).toFixed(2)} MB · {c.duration_seconds}s
+              </span>
             </div>
           </Card>
         ))}
@@ -2633,10 +2586,7 @@ function AdminPayroll() {
     }
   }
 
-  const totalPayroll = (rows ?? []).reduce(
-    (s, r) => s + Number(r.override_amount ?? r.total_amount ?? 0),
-    0,
-  );
+  const totalPayroll = (rows ?? []).reduce((s, r) => s + Number(r.override_amount ?? r.total_amount ?? 0), 0);
   // FIX: currency was computed but never used; INR was hardcoded everywhere
   const currency: string = rows?.[0]?.currency ?? "INR";
   const mixedCurrency = (rows ?? []).some((r) => (r.currency ?? "INR") !== currency);
@@ -2651,9 +2601,15 @@ function AdminPayroll() {
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Month</Label>
-            <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="w-full h-9 rounded-md border bg-transparent px-3 text-sm">
+            <select
+              value={month}
+              onChange={(e) => setMonth(Number(e.target.value))}
+              className="w-full h-9 rounded-md border bg-transparent px-3 text-sm"
+            >
               {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                <option key={m} value={m}>{new Date(2024, m - 1).toLocaleString(undefined, { month: "long" })}</option>
+                <option key={m} value={m}>
+                  {new Date(2024, m - 1).toLocaleString(undefined, { month: "long" })}
+                </option>
               ))}
             </select>
           </div>
@@ -2668,9 +2624,7 @@ function AdminPayroll() {
 
       <Card className="p-4 bg-gradient-to-br from-primary/10 to-accent/30">
         <div className="text-xs uppercase text-muted-foreground font-semibold">Total payroll this period</div>
-        <div className="text-3xl font-bold text-primary mt-1">
-          {formatMoney(totalPayroll, currency)}
-        </div>
+        <div className="text-3xl font-bold text-primary mt-1">{formatMoney(totalPayroll, currency)}</div>
         <div className="text-xs text-muted-foreground mt-1">
           {rows?.length ?? 0} employees · {year}-{String(month).padStart(2, "0")}
           {mixedCurrency && " · mixed currencies — total is not meaningful"}
@@ -2712,11 +2666,15 @@ function AdminPayroll() {
                     <td className="p-2 text-right whitespace-nowrap">
                       {r.status !== "finalized" ? (
                         <>
-                          <Button size="sm" variant="ghost" onClick={() => {
-                            setOverrideRow(r);
-                            setOverrideVal(String(r.override_amount ?? r.total_amount));
-                            setOverrideReason(r.override_reason ?? "");
-                          }}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setOverrideRow(r);
+                              setOverrideVal(String(r.override_amount ?? r.total_amount));
+                              setOverrideReason(r.override_reason ?? "");
+                            }}
+                          >
                             <Edit3 className="w-3 h-3" />
                           </Button>
                           <Button size="sm" variant="ghost" onClick={() => finalizeRow(r.id)}>
@@ -2730,4 +2688,131 @@ function AdminPayroll() {
                   </tr>
                 );
               })}
-              {(!rows || rows.lengt
+              {(!rows || rows.length === 0) && (
+                <tr>
+                  <td colSpan={8} className="text-center text-muted-foreground p-8 text-sm">
+                    No salary records. Click "Calculate" to generate from this month's attendance.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <Dialog open={!!overrideRow} onOpenChange={(o) => !o && setOverrideRow(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Override salary</DialogTitle>
+            <DialogDescription>
+              Set a custom payment amount and reason. The calculated value is kept for audit.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Override amount ({overrideRow?.currency ?? "INR"})</Label>
+              <Input type="number" value={overrideVal} onChange={(e) => setOverrideVal(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Reason</Label>
+              <Textarea rows={2} value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOverrideRow(null)}>
+              Cancel
+            </Button>
+            <Button onClick={saveOverride} disabled={savingOverride}>
+              {savingOverride ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function EmployeePayroll() {
+  const { user } = useAuth();
+  const { data: rows } = useQuery({
+    enabled: !!user,
+    queryKey: ["my-salary", user?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("salary_records")
+        .select("*")
+        .eq("employee_id", user!.id)
+        .order("period_year", { ascending: false })
+        .order("period_month", { ascending: false })
+        .limit(12);
+      return data ?? [];
+    },
+  });
+
+  const latest = rows?.[0];
+
+  return (
+    <div className="space-y-4">
+      {latest ? (
+        <Card className="p-5 bg-gradient-to-br from-primary/10 to-accent/30">
+          <div className="text-xs uppercase text-muted-foreground font-semibold">
+            {new Date(latest.period_year, latest.period_month - 1).toLocaleString(undefined, {
+              month: "long",
+              year: "numeric",
+            })}
+          </div>
+          <div className="text-4xl font-bold text-primary mt-1">
+            {formatMoney(Number(latest.override_amount ?? latest.total_amount), latest.currency ?? "INR")}
+          </div>
+          <div className="text-xs text-muted-foreground mt-2">
+            {Number(latest.worked_hours).toFixed(1)}h worked of {Number(latest.expected_hours).toFixed(0)}h expected ·
+            Status:{" "}
+            <Badge variant={latest.status === "finalized" ? "default" : "secondary"} className="text-[10px] ml-1">
+              {latest.status}
+            </Badge>
+          </div>
+        </Card>
+      ) : (
+        <Card className="p-8 text-center">
+          <DollarSign className="w-8 h-8 text-muted-foreground/60 mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">
+            No salary records yet. Your admin will calculate payroll at month-end.
+          </p>
+        </Card>
+      )}
+
+      <Card className="p-0 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-xs">
+              <tr>
+                <th className="text-left p-2">Period</th>
+                <th className="text-right p-2">Worked</th>
+                <th className="text-right p-2">Total</th>
+                <th className="text-right p-2">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows?.map((r) => (
+                <tr key={r.id} className="border-t">
+                  <td className="p-2">
+                    {r.period_year}-{String(r.period_month).padStart(2, "0")}
+                  </td>
+                  <td className="p-2 text-right font-mono text-xs">{Number(r.worked_hours).toFixed(1)}h</td>
+                  <td className="p-2 text-right font-mono font-semibold">
+                    {formatMoney(Number(r.override_amount ?? r.total_amount), r.currency ?? "INR")}
+                  </td>
+                  <td className="p-2 text-right">
+                    <Badge variant={r.status === "finalized" ? "default" : "secondary"} className="text-[10px]">
+                      {r.status}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+}
