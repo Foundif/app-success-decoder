@@ -69,7 +69,6 @@ import {
   requestClip,
   resolveAlert,
 } from "@/lib/workforce.functions";
-import { updateMonitoringSettings } from "@/lib/monitoring.functions";
 import { CaptureSession } from "@/lib/capture";
 import { usePlan } from "@/lib/usePlan";
 import { BrandLockup } from "@/components/brand";
@@ -860,10 +859,6 @@ function TeamTab() {
         <TabsTrigger value="clips">
           <Video className="w-3.5 h-3.5" /> Clips
         </TabsTrigger>
-        {/* FIX: this trigger was missing, so the Monitoring tab was unreachable */}
-        <TabsTrigger value="monitoring">
-          <Shield className="w-3.5 h-3.5" /> Monitoring
-        </TabsTrigger>
         <TabsTrigger value="invites">
           <KeyRound className="w-3.5 h-3.5" /> Invites
         </TabsTrigger>
@@ -894,9 +889,6 @@ function TeamTab() {
         <ClipsPanel scope="admin" />
       </TabsContent>
 
-      <TabsContent value="monitoring">
-        <MonitoringSettingsCard />
-      </TabsContent>
 
       <TabsContent value="invites" className="space-y-5">
         <Card className="p-4">
@@ -2815,4 +2807,37 @@ function EmployeePayroll() {
       </Card>
     </div>
   );
+}
+
+function TrialBanner() {
+  const plan = usePlan();
+  if (plan.status !== "trial" || !plan.isActive) return null;
+  const left = Math.max(0, Math.min(7, plan.daysLeft));
+  const pct = Math.round(((7 - left) / 7) * 100);
+  return (
+    <Card className="p-4 border-primary/30 bg-primary/5">
+      <div className="flex items-center justify-between text-sm font-semibold">
+        <span>Free Trial</span>
+        <span className="text-primary">{left} day{left === 1 ? "" : "s"} left</span>
+      </div>
+      <div className="mt-2 h-2 rounded-full bg-muted overflow-hidden">
+        <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
+      </div>
+    </Card>
+  );
+}
+
+function ScreenshotImage({ src }: { src: string | null }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    if (!src) return;
+    if (/^https?:/.test(src)) { setUrl(src); return; }
+    supabase.storage.from("recordings").createSignedUrl(src, 3600).then(({ data }) => {
+      if (alive) setUrl(data?.signedUrl ?? null);
+    });
+    return () => { alive = false; };
+  }, [src]);
+  if (!url) return <span className="text-xs text-muted-foreground">Loading…</span>;
+  return <img src={url} alt="Screenshot" className="w-full h-full object-cover" loading="lazy" />;
 }
