@@ -299,7 +299,7 @@ function AppShell({ role }: { role: AppRole }) {
                 </div>
                 <span className="text-[10px] text-muted-foreground font-medium">{planSub}</span>
               </div>
-              <div className="text-xs text-muted-foreground truncate">{profile?.full_name ?? profile?.email}</div>
+              <div className="text-xs text-muted-foreground truncate">Signed in as {profile?.full_name ?? profile?.email}</div>
               {(plan.readonly || !plan.tier || plan.status === "trial") && (
                 <button
                   onClick={() => navigate({ to: "/pricing" })}
