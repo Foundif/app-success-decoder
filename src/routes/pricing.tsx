@@ -49,6 +49,34 @@ type Plan = {
   per_user: boolean | null;
 };
 
+const PLAN_FEATURES: Record<string, string[]> = {
+  starter: [
+    "Up to 10 team members",
+    "Time tracking & attendance",
+    "Screenshots & screen clips",
+    "Idle & offline alerts",
+    "Basic reports",
+  ],
+  growth: [
+    "Everything in Starter",
+    "Up to 50 team members",
+    "Payroll with INR salary",
+    "Advanced reports & exports",
+    "Audit log & project tracking",
+  ],
+  scale: [
+    "Everything in Growth",
+    "Up to 200 team members",
+    "API access",
+    "Priority support",
+  ],
+  enterprise: [
+    "Unlimited team members",
+    "Dedicated account manager",
+    "Custom SLA & billing",
+  ],
+};
+
 function loadRazorpay(): Promise<boolean> {
   return new Promise((resolve) => {
     if (typeof window === "undefined") return resolve(false);
@@ -355,6 +383,14 @@ function PricingPage() {
                       `Subscribe`
                     )}
                   </Button>
+                  <ul className="mt-5 space-y-2 text-sm">
+                    {(PLAN_FEATURES[p.id] ?? []).map((f) => (
+                      <li key={f} className="flex items-start gap-2">
+                        <Check className="w-4 h-4 text-success shrink-0 mt-0.5" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </Card>
               );
             })}

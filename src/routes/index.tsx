@@ -229,6 +229,37 @@ function AppShell({ role }: { role: AppRole }) {
 
   const roleLabel = isAdmin ? "Business Operations" : "Team Member";
 
+  if (plan.status && plan.readonly && role !== "super_admin") {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <div className="max-w-sm w-full text-center space-y-4">
+          <BrandLockup className="h-9 mx-auto" />
+          <h1 className="text-2xl font-bold">Your free trial has ended</h1>
+          <p className="text-sm text-muted-foreground">
+            {isAdmin
+              ? "Your 7-day free trial is over. Choose a plan to keep tracking your team."
+              : "Your company's plan has expired. Please ask your admin to upgrade."}
+          </p>
+          {isAdmin && (
+            <Button className="w-full" onClick={() => navigate({ to: "/pricing" })}>
+              View plans
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={async () => {
+              await signOut();
+              navigate({ to: "/auth" });
+            }}
+          >
+            Sign out
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex">
       {/* Desktop sidebar */}
@@ -268,7 +299,7 @@ function AppShell({ role }: { role: AppRole }) {
                 </div>
                 <span className="text-[10px] text-muted-foreground font-medium">{planSub}</span>
               </div>
-              <div className="text-xs text-muted-foreground truncate">{profile?.full_name ?? profile?.email}</div>
+              <div className="text-xs text-muted-foreground truncate">Signed in as {profile?.full_name ?? profile?.email}</div>
               {(plan.readonly || !plan.tier || plan.status === "trial") && (
                 <button
                   onClick={() => navigate({ to: "/pricing" })}
@@ -305,15 +336,14 @@ function AppShell({ role }: { role: AppRole }) {
 
             <div className="hidden lg:block font-semibold capitalize">{safeTab}</div>
             <div className="flex items-center gap-2">
-              {plan.readonly && (
-                <Badge variant="destructive" className="hidden sm:inline-flex text-[10px]">
-                  Trial ended — read-only
-                </Badge>
-              )}
-              {plan.status === "trial" && plan.isActive && (
-                <Badge variant="secondary" className="hidden sm:inline-flex text-[10px]">
-                  Free Trial · {plan.daysLeft}d
-                </Badge>
+              {isAdmin && plan.status && (
+                <button
+                  onClick={() => navigate({ to: "/pricing" })}
+                  className="inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-semibold whitespace-nowrap"
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${plan.isActive ? "bg-success" : "bg-destructive"}`} />
+                  {plan.status === "trial" && plan.isActive ? `Trial · ${plan.daysLeft}d` : planLabel}
+                </button>
               )}
               {isAdmin && companyId && <AlertsBell companyId={companyId} />}
               <Button
