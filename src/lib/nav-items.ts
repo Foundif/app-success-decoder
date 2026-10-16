@@ -6,20 +6,19 @@ import {
   BarChart3,
   UserCircle,
   Tag,
+  CheckCircle2,
 } from "lucide-react";
 import type { AppRole } from "@/lib/auth-context";
 import type { PlanFeatures } from "@/lib/usePlan";
 
-export type AppTab = "home" | "team" | "screens" | "payroll" | "reports" | "profile" | "pricing";
+export type AppTab = "home" | "team" | "screens" | "proof" | "payroll" | "reports" | "profile" | "pricing";
 
 export type NavItem = {
   id: AppTab;
   label: string;
   icon: React.ElementType;
-  /** route target */
   to: "/" | "/profile" | "/pricing";
-  /** tab to activate inside the home shell when `to === "/"` */
-  tab?: "home" | "team" | "screens" | "payroll" | "reports";
+  tab?: "home" | "team" | "screens" | "proof" | "payroll" | "reports";
   allow: AppRole[];
   gate?: (plan: PlanFeatures) => boolean;
 };
@@ -47,6 +46,7 @@ export function consumePendingTab(): string | null {
 export const NAV_ITEMS: NavItem[] = [
   { id: "home", label: "Home", icon: Home, to: "/", tab: "home", allow: ["super_admin", "company_admin", "employee"] },
   { id: "team", label: "Team", icon: Users, to: "/", tab: "team", allow: ["super_admin", "company_admin"] },
+  { id: "proof", label: "Proof", icon: CheckCircle2, to: "/", tab: "proof", allow: ["super_admin", "company_admin", "employee"] },
   { id: "screens", label: "Screens", icon: Camera, to: "/", tab: "screens", allow: ["super_admin", "company_admin", "employee"] },
   { id: "payroll", label: "Payroll", icon: DollarSign, to: "/", tab: "payroll", allow: ["super_admin", "company_admin", "employee"], gate: (p) => p.payroll },
   { id: "reports", label: "Reports", icon: BarChart3, to: "/", tab: "reports", allow: ["super_admin", "company_admin"], gate: (p) => p.advancedReports },
