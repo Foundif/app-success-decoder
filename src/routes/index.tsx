@@ -190,8 +190,8 @@ function HomeGate() {
   return <AppShell role={primaryRole} />;
 }
 
-type Tab = "home" | "team" | "screens" | "payroll" | "reports" | "profile";
-const VALID_TABS: Tab[] = ["home", "team", "screens", "payroll", "reports"];
+type Tab = "home" | "team" | "proof" | "screens" | "payroll" | "reports" | "profile";
+const VALID_TABS: Tab[] = ["home", "team", "proof", "screens", "payroll", "reports"];
 const ADMIN_ONLY_TABS: Tab[] = ["team", "reports"];
 
 function AppShell({ role }: { role: AppRole }) {
@@ -372,10 +372,12 @@ function AppShell({ role }: { role: AppRole }) {
 
         <main className="max-w-screen-xl mx-auto px-4 py-6">
           {safeTab === "home" && <HomeTab role={role} />}
-          {safeTab === "team" && isAdmin && <TeamTab />}
-          {safeTab === "screens" && <ScreensTab role={role} />}
-          {safeTab === "payroll" && <PayrollTab role={role} />}
-          {safeTab === "reports" && isAdmin && <ReportsTab />}
+{safeTab === "team" && isAdmin && <TeamTab />}
+{safeTab === "proof" && <ProofTab role={role} />}
+{safeTab === "screens" && <ScreensTab role={role} />}
+{safeTab === "payroll" && <PayrollTab role={role} />}
+{safeTab === "reports" && isAdmin && <ReportsTab />}
+
         </main>
       </div>
 
@@ -2871,3 +2873,321 @@ function ScreenshotImage({ src }: { src: string | null }) {
   if (!url) return <span className="text-xs text-muted-foreground">Loading…</span>;
   return <img src={url} alt="Screenshot" className="w-full h-full object-cover" loading="lazy" />;
 }
+
+
+function ProofTab({ role }: { role: AppRole }) {
+  const { companyId, user } = useAuth();
+  const isAdmin = role !== "employee";
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [openNew, setOpenNew] = useState(false);
+  const [title, setTitle] = useState("");
+  const [clientName, setClientName] = useState("");
+  const [description, setDescription] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  // Submission modal state
+  const [activeJob, setActiveJob] = useState<any | null>(null);
+  const [stepTitle, setStepTitle] = useState("");
+  const [proofUrl, setProofUrl] = useState("");
+  const [notes, setNotes] = useState("");
+
+  const loadJobs = async () => {
+    if (!companyId) return;
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("proof_jobs")
+        .select(`*, assigned_profile:assigned_to(full_name, email), submissions:proof_submissions(*)`)
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      setJobs(data ?? []);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadJobs();
+  }, [companyId]);
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!companyId || !title.trim()) return;
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.from("proof_jobs").insert({
+        company_id: companyId,
+        title,
+        client_name: clientName,
+        description,
+        assigned_to: user?.id,
+        status: "pending",
+      });
+      if (error) throw error;
+      toast.success("Proof job created");
+      setTitle("");
+      setClientName("");
+      setDescription("");
+      setOpenNew(false);
+      loadJobs();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleAddProof = async (markComplete: boolean) => {
+    if (!activeJob || !stepTitle.trim() || !companyId) return;
+    setSubmitting(true);
+    try {
+      const { error: sErr } = await supabase.from("proof_submissions").insert({
+        job_id: activeJob.id,
+        company_id: companyId,
+        submitted_by: user?.id,
+        step_title: stepTitle,
+        notes,
+        proof_url: proofUrl,
+      });
+      if (sErr) throw sErr;
+
+      await supabase
+        .from("proof_jobs")
+        .update({
+          status: markComplete ? "submitted" : "in_progress",
+          completed_at: markComplete ? new Date().toISOString() : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", activeJob.id);
+
+      toast.success(markComplete ? "Job proof submitted for verification!" : "Progress proof logged");
+      setActiveJob(null);
+      setStepTitle("");
+      setNotes("");
+      setProofUrl("");
+      loadJobs();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const copyVerifyLink = (token: string) => {
+    const url = `${window.location.origin}/proof-verify?token=${token}`;
+    navigator.clipboard.writeText(url);
+    toast.success("Client verification link copied to clipboard!");
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight">Proof Layer (Work Verification)</h2>
+          <p className="text-sm text-muted-foreground">
+            Track tasks with verifiable timestamps, evidence links, and client approval links.
+          </p>
+        </div>
+        {isAdmin && (
+          <Button onClick={() => setOpenNew(true)} className="bg-[#F26B2A] hover:bg-[#d9591c] text-white">
+            + New Proof Task
+          </Button>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center p-12">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : jobs.length === 0 ? (
+        <Card className="p-8 text-center space-y-3">
+          <CheckCircle2 className="h-10 w-10 text-muted-foreground mx-auto" />
+          <h3 className="font-semibold text-base">No proof jobs created yet</h3>
+          <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+            Create a task with required deliverables. Staff can submit proof, and you can share a verification link directly with your client.
+          </p>
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {jobs.map((job) => (
+            <Card key={job.id} className="p-5 flex flex-col justify-between space-y-4">
+              <div>
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <h3 className="font-semibold text-base">{job.title}</h3>
+                  <span
+                    className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${
+                      job.status === "verified"
+                        ? "bg-green-500/10 text-green-600 border border-green-500/20"
+                        : job.status === "submitted"
+                        ? "bg-blue-500/10 text-blue-600 border border-blue-500/20"
+                        : job.status === "in_progress"
+                        ? "bg-orange-500/10 text-orange-600 border border-orange-500/20"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {job.status.replace("_", " ").toUpperCase()}
+                  </span>
+                </div>
+                {job.client_name && (
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Client: <span className="font-medium text-foreground">{job.client_name}</span>
+                  </p>
+                )}
+                {job.description && (
+                  <p className="text-sm text-muted-foreground line-clamp-2">{job.description}</p>
+                )}
+              </div>
+
+              {/* Submissions Timeline / Evidence */}
+              {job.submissions && job.submissions.length > 0 && (
+                <div className="space-y-1.5 pt-2 border-t text-xs">
+                  <span className="font-medium text-muted-foreground">Logged Evidence ({job.submissions.length}):</span>
+                  {job.submissions.slice(-2).map((sub: any) => (
+                    <div key={sub.id} className="bg-muted/40 p-2 rounded flex justify-between items-center">
+                      <div>
+                        <p className="font-medium text-foreground">{sub.step_title}</p>
+                        {sub.notes && <p className="text-muted-foreground">{sub.notes}</p>}
+                      </div>
+                      {sub.proof_url && (
+                        <a
+                          href={sub.proof_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[#F26B2A] hover:underline shrink-0 ml-2"
+                        >
+                          View Proof ↗
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="pt-2 border-t flex items-center justify-between gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => copyVerifyLink(job.verification_token)}
+                  className="text-xs"
+                >
+                  Share Client Proof Link
+                </Button>
+                {job.status !== "verified" && (
+                  <Button
+                    size="sm"
+                    onClick={() => setActiveJob(job)}
+                    className="text-xs bg-[#F26B2A] hover:bg-[#d9591c] text-white"
+                  >
+                    + Add Proof
+                  </Button>
+                )}
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Modal: New Proof Task */}
+      <Dialog open={openNew} onOpenChange={setOpenNew}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create New Proof Job</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreate} className="space-y-4">
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Job / Deliverable Title *</label>
+              <Input
+                required
+                placeholder="e.g. Completed Order Dispatch / Client Deliverable"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Client Name</label>
+              <Input
+                placeholder="e.g. TheAurax Clothing"
+                value={clientName}
+                onChange={(e) => setClientName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Description & Required Proof</label>
+              <Textarea
+                placeholder="Details of what proof needs to be provided (photos, links, deliverable files)..."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpenNew(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submitting} className="bg-[#F26B2A] text-white">
+                {submitting ? "Creating..." : "Create Task"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Add Proof */}
+      <Dialog open={!!activeJob} onOpenChange={(open) => !open && setActiveJob(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Submit Work Proof for: {activeJob?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Step / Action Name *</label>
+              <Input
+                placeholder="e.g. Quality Check Passed / Files Uploaded"
+                value={stepTitle}
+                onChange={(e) => setStepTitle(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Proof URL (Image / Drive / Live Link)</label>
+              <Input
+                placeholder="https://drive.google.com/... or https://..."
+                value={proofUrl}
+                onChange={(e) => setProofUrl(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Notes / Remarks</label>
+              <Textarea
+                placeholder="Any observations or completion details..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </div>
+            <DialogFooter className="flex-col sm:flex-row gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={submitting}
+                onClick={() => handleAddProof(false)}
+              >
+                Log In-Progress Proof
+              </Button>
+              <Button
+                type="button"
+                disabled={submitting}
+                onClick={() => handleAddProof(true)}
+                className="bg-[#F26B2A] text-white"
+              >
+                {submitting ? "Submitting..." : "Submit as Completed"}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
