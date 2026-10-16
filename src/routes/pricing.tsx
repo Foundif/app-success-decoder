@@ -52,30 +52,36 @@ type Plan = {
 const PLAN_FEATURES: Record<string, string[]> = {
   starter: [
     "Up to 10 team members",
+    "Proof Layer (Job & Deliverable verification)",
+    "Client verification links",
     "Time tracking & attendance",
-    "Screenshots & screen clips",
+    "Screenshots & screen clips (10-min interval)",
     "Idle & offline alerts",
     "Basic reports",
   ],
   growth: [
     "Everything in Starter",
     "Up to 50 team members",
-    "Payroll with INR salary",
-    "Advanced reports & exports",
+    "Screenshots (5-min interval)",
+    "Payroll with INR auto-calculation",
+    "Advanced reports & CSV exports",
     "Audit log & project tracking",
   ],
   scale: [
     "Everything in Growth",
     "Up to 200 team members",
-    "API access",
-    "Priority support",
+    "Custom screenshot intervals",
+    "Full API & Webhook access",
+    "Dedicated priority support",
   ],
   enterprise: [
     "Unlimited team members",
+    "Custom Proof Layer workflows",
     "Dedicated account manager",
-    "Custom SLA & billing",
+    "Custom SLA & procurement billing",
   ],
 };
+
 
 function loadRazorpay(): Promise<boolean> {
   return new Promise((resolve) => {
